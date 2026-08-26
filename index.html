@@ -55,14 +55,31 @@
 const { useState, useEffect, useMemo } = React;
 
 /* ---------------------------------------------------------
-   0. CẤU HÌNH & XỬ LÝ JSON
+   0. CẤU HÌNH & XỬ LÝ JSON (ĐÃ SỬA LỖI ESCAPE CHARACTER)
 --------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
 
 function cleanAndParseJSON(rawText) {
   let clean = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  
+  // Loại bỏ các ký tự điều khiển không hợp lệ trong chuỗi JSON
+  clean = clean.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+
+  // Tự động escape các dấu gạch chéo ngược (\) bị lỗi
   clean = clean.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
-  return JSON.parse(clean);
+
+  try {
+    return JSON.parse(clean);
+  } catch (err) {
+    // Trích xuất mảng JSON nếu AI trả về kèm văn bản phụ
+    const start = clean.indexOf("[");
+    const end = clean.lastIndexOf("]");
+    if (start !== -1 && end !== -1 && end > start) {
+      const extracted = clean.substring(start, end + 1);
+      return JSON.parse(extracted);
+    }
+    throw err;
+  }
 }
 
 async function callGemini(promptText, userApiKey) {
@@ -182,7 +199,7 @@ async function generateQuestionBank(sourceText, standard, apiKey, onProgress){
     const prompt = `Bạn là chuyên gia khảo thí uy tín. Định hướng / Chuẩn đề thi: "${standard}". 
 Dựa vào nguồn/kiến thức trọng tâm sau: "${sourceText}". 
 Hãy tạo đúng ${band.count} câu hỏi trắc nghiệm mới bám sát định hướng "${standard}" ở mức độ "${band.levelName}" (${band.guidance}). 
-Yêu cầu: Tránh tạo câu hỏi quá đánh đố, lắt léo phi thực tế hoặc mất trọng tâm; bám sát năng lực thực tế của thí sinh.
+Yêu cầu: Tránh tạo câu hỏi quá đánh đố, lắt léo phi thực tế hoặc mất trọng tâm; bám sát năng lực thực tế của thí sinh. Tuyệt đối không dùng ký tự xuống dòng trực tiếp trong chuỗi JSON.
 Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử định dạng chuẩn: 
 [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
 
