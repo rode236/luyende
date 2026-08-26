@@ -70,14 +70,14 @@ const { useState, useEffect, useMemo, useRef } = React;
 /* ---------------------------------------------------------
    0. CẤU HÌNH GEMINI API KEY
 --------------------------------------------------------- */
-const GEMINI_API_KEY = "ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY"; // Lấy key miễn phí tại: https://aistudio.google.com/
-
-async function callGemini(promptText) {
-  if (!GEMINI_API_KEY || GEMINI_API_KEY === "ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY") {
-    throw new Error("Bạn chưa nhập GEMINI_API_KEY trong file HTML. Hãy mở file và dán key của bạn vào!");
+async function callGemini(promptText, userApiKey) {
+  const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
+  
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error("Vui lòng nhập Gemini API Key của bạn ở mục số 1 bên trên!");
   }
   
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
   
   const res = await fetch(url, {
     method: "POST",
@@ -196,9 +196,9 @@ function difficultyMeta(d){
 }
 
 /* ---------------------------------------------------------
-   3. GEMINI AI: SINH ĐỀ LUYỆN TẬP CÂU SAI
+   3. GEMINI AI: SINH ĐỀ
 --------------------------------------------------------- */
-async function generateAdaptiveQuestion(sourceQuestion){
+async function generateAdaptiveQuestion(sourceQuestion, apiKey){
   const prompt =
 `Bạn là giáo viên luyện thi THPT Quốc gia môn Toán tại Việt Nam.
 Học sinh vừa làm SAI câu hỏi trắc nghiệm sau:
@@ -212,7 +212,7 @@ Hãy tạo MỘT câu hỏi trắc nghiệm MỚI cùng dạng toán, cùng đ�
 Trả về JSON đúng định dạng:
 {"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}`;
 
-  const parsed = await callGemini(prompt);
+  const parsed = await callGemini(prompt, apiKey);
   return {
     id: sourceQuestion.id + "-ai-" + Math.random().toString(36).slice(2,8),
     content: parsed.question,
@@ -222,9 +222,6 @@ Trả về JSON đúng định dạng:
   };
 }
 
-/* ---------------------------------------------------------
-   3b. GEMINI AI: SINH 12 CÂU TỪ 1 CÂU GỐC (ĐỘ KHÓ TĂNG DẦN)
---------------------------------------------------------- */
 const DIFFICULTY_BANDS = [
   { from:1, to:4, count:4, levelName:"Nhận biết - Thông hiểu", guidance:"Rất dễ, công thức trực tiếp, số liệu đẹp để làm quen." },
   { from:5, to:8, count:4, levelName:"Vận dụng thấp", guidance:"Độ khó trung bình, cần 2-3 bước biến đổi." },
@@ -232,7 +229,7 @@ const DIFFICULTY_BANDS = [
   { from:12, to:12, count:1, levelName:"Phân hóa", guidance:"Câu hỏi chốt chặn, đòi hỏi tư duy sâu nhất." }
 ];
 
-async function fetchDifficultyBand(sourceText, band){
+async function fetchDifficultyBand(sourceText, band, apiKey){
   const prompt =
 `Bạn là giáo viên Toán luyện thi THPT.
 Câu hỏi gốc: "${sourceText}"
@@ -244,7 +241,7 @@ Tạo đúng ${band.count} câu hỏi trắc nghiệm mới thuộc mức độ 
 Trả về một MẢNG JSON duy nhất gồm ${band.count} phần tử:
 [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
 
-  const parsed = await callGemini(prompt);
+  const parsed = await callGemini(prompt, apiKey);
   return parsed.map((item, i) => ({
     id: "bank-" + band.from + "-" + i + "-" + Math.random().toString(36).slice(2,7),
     content: item.question,
@@ -255,18 +252,18 @@ Trả về một MẢNG JSON duy nhất gồm ${band.count} phần tử:
   }));
 }
 
-async function generateQuestionBank(sourceText, onProgress){
+async function generateQuestionBank(sourceText, apiKey, onProgress){
   let all = [];
   for(const band of DIFFICULTY_BANDS){
     if(onProgress) onProgress(band);
-    const qs = await fetchDifficultyBand(sourceText, band);
+    const qs = await fetchDifficultyBand(sourceText, band, apiKey);
     all = all.concat(qs);
   }
   return all;
 }
 
 /* ---------------------------------------------------------
-   4. KHUNG THẢO LUẬN LƯU VÀO LOCALSTORAGE
+   4. THẢO LUẬN
 --------------------------------------------------------- */
 function DiscussionThread({ qid }){
   const [open, setOpen] = useState(false);
@@ -572,7 +569,7 @@ function ResultScreen({ groups, answers, result, attemptCount, onRetry, onAIRetr
 }
 
 /* ---------------------------------------------------------
-   7b. MÀN HÌNH CHỌN CHẾ ĐỘ & BỘ TẠO ĐỀ BẰNG GEMINI
+   8. MÀN HÌNH TẠO ĐỀ GEMINI AI
 --------------------------------------------------------- */
 function HomeScreen({ onStartSample, onOpenGenerator }){
   return (
@@ -601,18 +598,29 @@ function HomeScreen({ onStartSample, onOpenGenerator }){
   );
 }
 
-function GeneratorScreen({ onBack, onGenerated }){
+function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
   const [sourceText, setSourceText] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
 
   async function handleGenerate(){
-    if(!sourceText.trim()){ setError("Vui lòng dán nội dung câu hỏi gốc."); return; }
+    if(!apiKey || !apiKey.trim()){ 
+      setError("Vui lòng nhập Gemini API Key của bạn vào ô số 1!"); 
+      return; 
+    }
+    if(!sourceText.trim()){ 
+      setError("Vui lòng dán nội dung câu hỏi gốc vào ô số 2!"); 
+      return; 
+    }
     setError("");
     setLoading(true);
+    
+    // Lưu key vào trình duyệt người dùng
+    localStorage.setItem("user_gemini_key", apiKey.trim());
+
     try{
-      const questions = await generateQuestionBank(sourceText.trim(), band => {
+      const questions = await generateQuestionBank(sourceText.trim(), apiKey.trim(), band => {
         setProgressLabel(`Gemini đang tạo câu ${band.from}${band.from!==band.to ? "-"+band.to : ""}/12 (${band.levelName})…`);
       });
       if(questions.length === 0) throw new Error("Không nhận được câu hỏi từ Gemini.");
@@ -634,23 +642,32 @@ function GeneratorScreen({ onBack, onGenerated }){
       </header>
 
       <div className="max-w-3xl mx-auto p-4 lg:p-8">
-        <div className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
-          <label className="text-sm font-semibold text-[var(--ink)] mb-2 block">Dán 1 câu hỏi gốc vào đây (hỗ trợ công thức $...$)</label>
-          <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
-            placeholder="Ví dụ: Cho hàm số $y=-x^3+3x^2+2$. Số điểm cực trị của hàm số là bao nhiêu?"
-            className="w-full text-sm px-3.5 py-3 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+        <div className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4 space-y-4">
+          <div>
+            <label className="text-sm font-semibold text-[var(--ink)] mb-1.5 block">1. Nhập Google Gemini API Key của bạn</label>
+            <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
+              placeholder="Dán mã API Key dạng AIzaSy... (Lấy miễn phí tại aistudio.google.com)"
+              className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-[var(--ink)] mb-1.5 block">2. Dán 1 câu hỏi gốc vào đây (hỗ trợ công thức $...$)</label>
+            <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
+              placeholder="Ví dụ: Cho hàm số $y=-x^3+3x^2+2$. Số điểm cực trị của hàm số là bao nhiêu?"
+              className="w-full text-sm px-3.5 py-3 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+          </div>
 
           {sourceText.trim() && (
-            <div className="mt-3 bg-[#FAF9F5] rounded-xl p-3.5">
+            <div className="bg-[#FAF9F5] rounded-xl p-3.5">
               <p className="text-[11px] font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Xem trước</p>
               <MathText text={sourceText} className="text-sm text-[var(--ink)] leading-relaxed block" />
             </div>
           )}
 
-          {error && <p className="text-sm text-[var(--danger)] mt-3 font-semibold">{error}</p>}
+          {error && <p className="text-sm text-[var(--danger)] font-semibold">{error}</p>}
 
           <button onClick={handleGenerate} disabled={loading}
-            className="mt-4 w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            className="w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             {loading ? <><span className="spinner !w-4 !h-4 !border-2"></span> {progressLabel || "Đang xử lý…"}</> : "✨ Gemini AI Tạo bộ 12 câu hỏi"}
           </button>
         </div>
@@ -660,7 +677,7 @@ function GeneratorScreen({ onBack, onGenerated }){
 }
 
 /* ---------------------------------------------------------
-   8. CHƯƠNG TRÌNH CHÍNH (APP)
+   9. CHƯƠNG TRÌNH CHÍNH (APP)
 --------------------------------------------------------- */
 function App(){
   const [groups, setGroups] = useState(() => buildAttempt(BASE_GROUPS));
@@ -671,6 +688,7 @@ function App(){
   const [result, setResult] = useState(null);
   const [attemptCount, setAttemptCount] = useState(1);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
   const startTimeRef = useRef(null);
   const expiredRef = useRef(false);
 
@@ -735,7 +753,7 @@ function App(){
     const generated = [];
     for(const q of wrongOnes){
       try{
-        const newQ = await generateAdaptiveQuestion(q);
+        const newQ = await generateAdaptiveQuestion(q, apiKey);
         generated.push(newQ);
       }catch(e){
         generated.push({ id:q.id+"-retry", content:q.content, options:q.options.map(o=>o.text), correctIndex:q.options.findIndex(o=>o.key===q.correctKey), explanation:q.explanation });
@@ -762,7 +780,7 @@ function App(){
         <HomeScreen onStartSample={handleStartSample} onOpenGenerator={()=>setScreen("generator")} />
       )}
       {screen === "generator" && (
-        <GeneratorScreen onBack={()=>setScreen("home")} onGenerated={handleBankGenerated} />
+        <GeneratorScreen onBack={()=>setScreen("home")} onGenerated={handleBankGenerated} apiKey={apiKey} setApiKey={setApiKey} />
       )}
       {screen === "exam" && (
         <ExamScreen groups={groups} answers={answers} onSelect={handleSelect}
