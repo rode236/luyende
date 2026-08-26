@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/React/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
@@ -55,14 +55,14 @@
 const { useState, useEffect, useMemo } = React;
 
 /* ---------------------------------------------------------
-   0. CẤU HÌNH & XỬ LÝ JSON (ĐÃ SỬA LỖI ESCAPE CHARACTER)
+   0. CẤU HÌNH & XỬ LÝ JSON (ĐÃ SỬA LỖI MODEL & ESCAPE)
 --------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
 
 function cleanAndParseJSON(rawText) {
   let clean = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
   
-  // Loại bỏ các ký tự điều khiển không hợp lệ trong chuỗi JSON
+  // Loại bỏ các ký tự điều khiển không hợp lệ
   clean = clean.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
 
   // Tự động escape các dấu gạch chéo ngược (\) bị lỗi
@@ -88,7 +88,8 @@ async function callGemini(promptText, userApiKey) {
     throw new Error("Vui lòng nhập Gemini API Key của bạn!");
   }
   
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey.trim()}`;
+  // Đã đổi sang gemini-2.5-flash để tránh lỗi quá tải high demand
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
   
   const res = await fetch(url, {
     method: "POST",
