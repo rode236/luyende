@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LuyệnThi.AI — Phòng thi trực tuyến Gemini AI</title>
   
-  <!-- Font & Tailwind CSS -->
+  <!-- Fonts & Tailwind CSS -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- KaTeX cho công thức Toán -->
+  <!-- KaTeX CSS & JS cho công thức Toán -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 
@@ -40,7 +40,7 @@
   <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6"></div>
 
   <script>
-    // --- DỮ LIỆU ĐỀ THI MẪU ---
+    // Dữ liệu đề thi mẫu
     const defaultExams = [
       {
         id: "exam-1",
@@ -72,17 +72,41 @@
       }
     ];
 
-    // --- BIẾN TRẠNG THÁI ---
+    // Khởi tạo trạng thái
     let state = {
-      screen: 'home', // 'home', 'exam', 'result'
-      exams: JSON.parse(localStorage.getItem('saved_exams')) || defaultExams,
+      screen: 'home', // 'home', 'generator', 'exam', 'result'
+      exams: loadSavedExams(),
+      apiKey: localStorage.getItem('user_gemini_key') || '',
       currentExam: null,
       userAnswers: {},
       timeLeft: 0,
-      timerId: null
+      timerId: null,
+      loading: false,
+      errorMsg: ''
     };
 
-    // --- HÀM RENDER MATH (KATEX) ---
+    // Hàm đọc LocalStorage an toàn (Xử lý lỗi undefined)
+    function loadSavedExams() {
+      try {
+        const data = localStorage.getItem('saved_exams');
+        if (!data) return defaultExams;
+        const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed)) return defaultExams;
+        return parsed.map(e => ({
+          ...e,
+          duration: Number(e.duration) || 45
+        }));
+      } catch (err) {
+        return defaultExams;
+      }
+    }
+
+    function saveExams(list) {
+      state.exams = list;
+      localStorage.setItem('saved_exams', JSON.stringify(list));
+    }
+
+    // Render KaTeX cho công thức Toán
     function renderMath(text) {
       if (!text) return '';
       return text.replace(/\$([^$]+)\$/g, (match, math) => {
@@ -94,32 +118,43 @@
       });
     }
 
-    // --- CÁC MÀN HÌNH ---
-
-    // 1. Trang chủ
+    // --- MÀN HÌNH 1: SẢNH CHÍNH ---
     function renderHome() {
       const app = document.getElementById('app');
       app.innerHTML = `
-        <div class="mb-8 flex items-center justify-between">
+        <div class="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 class="font-display font-extrabold text-2xl sm:text-3xl">Sảnh Thi Trực Tuyến</h1>
-            <p class="text-sm text-gray-600 mt-1">Chọn bộ đề để bắt đầu luyện tập</p>
+            <p class="text-sm text-gray-600 mt-1">Kho lưu trữ & Luyện đề thông minh tích hợp Gemini AI</p>
           </div>
+          <button onclick="goGenerator()" class="px-5 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold text-sm shadow-sm hover:opacity-90 transition flex items-center gap-2">
+            ✨ Tạo đề mới bằng AI
+          </button>
         </div>
 
         <div class="bg-white rounded-2xl border border-[var(--line)] p-6 shadow-sm">
-          <h2 class="font-display font-bold text-lg mb-4">Danh sách đề thi hiện có</h2>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-display font-bold text-lg">Danh sách đề thi hiện có (${state.exams.length})</h2>
+            <button onclick="resetDefaultExams()" class="text-xs text-gray-400 hover:text-red-500 underline">Khôi phục đề mẫu</button>
+          </div>
+
           <div class="space-y-3">
             ${state.exams.map((exam, idx) => `
               <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[var(--line)] bg-[#FAF9F5] gap-3">
                 <div>
                   <span class="text-xs font-mono-num font-bold px-2 py-0.5 rounded bg-[#E4E1D8]">Đề #${idx + 1}</span>
-                  <span class="text-xs text-gray-500 ml-2">⏱️ ${exam.duration} phút</span>
+                  <span class="text-xs text-gray-500 ml-2">⏱️ ${exam.duration || 45} phút</span>
+                  <span class="text-xs text-gray-400 ml-2">• ${exam.questions ? exam.questions.length : 0} câu hỏi</span>
                   <h3 class="font-semibold text-base mt-1">${exam.title}</h3>
                 </div>
-                <button onclick="startExam('${exam.id}')" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[var(--ink)] text-white font-semibold text-sm hover:opacity-90 transition">
-                  Vào thi →
-                </button>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                  <button onclick="startExam('${exam.id}')" class="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[var(--ink)] text-white font-semibold text-sm hover:opacity-90 transition">
+                    Vào thi →
+                  </button>
+                  <button onclick="deleteExam('${exam.id}')" class="px-3 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm">
+                    🗑️
+                  </button>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -127,7 +162,48 @@
       `;
     }
 
-    // 2. Trang làm bài thi
+    // --- MÀN HÌNH 2: TẠO ĐỀ BẰNG AI ---
+    function renderGenerator() {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <button onclick="goHome()" class="text-sm text-gray-500 mb-4 inline-block hover:underline">← Quay lại Sảnh chính</button>
+        <div class="bg-white rounded-2xl border border-[var(--line)] p-6 space-y-5 shadow-sm max-w-2xl mx-auto">
+          <div>
+            <h2 class="font-display font-bold text-xl">Soạn đề thi tự động bằng Gemini AI</h2>
+            <p class="text-xs text-gray-500 mt-1">Dán tài liệu hoặc yêu cầu, AI sẽ tự tạo câu hỏi trắc nghiệm kèm lời giải.</p>
+          </div>
+          
+          ${state.errorMsg ? `<div class="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">${state.errorMsg}</div>` : ''}
+
+          <div>
+            <label class="text-xs font-bold text-gray-600 uppercase block mb-1">1. Tên đề thi</label>
+            <input id="examTitle" type="text" placeholder="Nhập tên đề thi..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none" value="Đề Ôn Tập AI - ${new Date().toLocaleDateString('vi-VN')}">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">2. Thời gian (Phút)</label>
+              <input id="examDuration" type="number" value="45" min="1" max="180" class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none">
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">3. Gemini API Key</label>
+              <input id="apiKeyInput" type="password" placeholder="AIzaSy..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none" value="${state.apiKey}">
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-gray-600 uppercase block mb-1">4. Nội dung / Kiến thức cần tạo câu hỏi</label>
+            <textarea id="sourceContent" rows="6" placeholder="Dán đoạn văn bản, danh sách câu hỏi thô hoặc chủ đề bài học vào đây..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none"></textarea>
+          </div>
+
+          <button onclick="generateExamWithAI()" ${state.loading ? 'disabled' : ''} class="w-full py-4 rounded-xl bg-[var(--accent)] font-bold text-base hover:opacity-90 transition shadow-sm">
+            ${state.loading ? '⏳ Gemini đang xử lý & tạo câu hỏi...' : '✨ Tạo Đề Ngay'}
+          </button>
+        </div>
+      `;
+    }
+
+    // --- MÀN HÌNH 3: LÀM BÀI THI ---
     function renderExam() {
       const app = document.getElementById('app');
       const exam = state.currentExam;
@@ -138,10 +214,10 @@
       app.innerHTML = `
         <div class="sticky top-0 bg-[#FAF9F5] py-4 border-b border-[var(--line)] flex items-center justify-between mb-6 z-10">
           <div>
-            <button onclick="goHome()" class="text-xs text-gray-500 hover:underline">← Thoát</button>
+            <button onclick="goHome()" class="text-xs text-gray-500 hover:underline">← Thoát bài thi</button>
             <h2 class="font-display font-bold text-lg">${exam.title}</h2>
           </div>
-          <div class="font-mono-num text-2xl font-bold bg-white px-4 py-1.5 rounded-xl border border-[var(--line)]">
+          <div class="font-mono-num text-2xl font-bold bg-white px-4 py-1.5 rounded-xl border border-[var(--line)] shadow-sm">
             ⏳ ${timeStr}
           </div>
         </div>
@@ -169,14 +245,14 @@
         </div>
 
         <div class="mt-8 mb-12">
-          <button onclick="submitExam()" class="w-full py-4 rounded-xl bg-[var(--ink)] text-white font-bold text-lg shadow-md hover:opacity-95">
+          <button onclick="submitExam()" class="w-full py-4 rounded-xl bg-[var(--ink)] text-white font-bold text-lg shadow-md hover:opacity-95 transition">
             Nộp Bài Thi
           </button>
         </div>
       `;
     }
 
-    // 3. Trang kết quả
+    // --- MÀN HÌNH 4: KẾT QUẢ ---
     function renderResult() {
       const app = document.getElementById('app');
       const exam = state.currentExam;
@@ -189,7 +265,7 @@
       app.innerHTML = `
         <div class="bg-white rounded-2xl border border-[var(--line)] p-6 sm:p-8 text-center max-w-xl mx-auto mt-6 shadow-sm">
           <h1 class="font-display font-bold text-xl mb-1">${exam.title}</h1>
-          <p class="text-xs text-gray-500 mb-6">Kết quả làm bài của bạn</p>
+          <p class="text-xs text-gray-500 mb-6">Kết quả làm bài thi của bạn</p>
           
           <div class="text-6xl font-extrabold text-[var(--ink)] mb-2 font-display">${score}</div>
           <p class="text-sm text-gray-600 mb-6">Đúng ${correct} / ${exam.questions.length} câu</p>
@@ -200,7 +276,7 @@
               const userAns = state.userAnswers[q.id];
               const isCorrect = userAns === q.correctIndex;
               return `
-                <div class="p-3 rounded-xl border ${isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'} text-xs">
+                <div class="p-3.5 rounded-xl border ${isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'} text-xs">
                   <p class="font-semibold text-gray-800">Câu ${idx + 1}: ${isCorrect ? '✅ Đúng' : '❌ Sai'}</p>
                   <p class="mt-1 text-gray-600">Đáp án đúng: <b>${['A','B','C','D'][q.correctIndex]}</b></p>
                   <p class="mt-1 text-gray-500"><i>Giải thích:</i> ${renderMath(q.explanation)}</p>
@@ -209,18 +285,83 @@
             }).join('')}
           </div>
 
-          <button onclick="goHome()" class="w-full py-3 rounded-xl bg-[var(--ink)] text-white font-bold">
+          <button onclick="goHome()" class="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-bold transition hover:opacity-90">
             🏠 Quay lại Sảnh chính
           </button>
         </div>
       `;
     }
 
-    // --- CÁC HÀM ĐIỀU KHIỂN ---
+    // --- GỌI GEMINI API ---
+    async function generateExamWithAI() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      const content = document.getElementById('sourceContent').value.trim();
+      const title = document.getElementById('examTitle').value.trim() || 'Đề AI';
+      const duration = parseInt(document.getElementById('examDuration').value) || 45;
+
+      if (!key) { state.errorMsg = 'Vui lòng nhập Gemini API Key!'; renderGenerator(); return; }
+      if (!content) { state.errorMsg = 'Vui lòng nhập nội dung để AI tạo câu hỏi!'; renderGenerator(); return; }
+
+      state.loading = true;
+      state.errorMsg = '';
+      localStorage.setItem('user_gemini_key', key);
+      state.apiKey = key;
+      renderGenerator();
+
+      const prompt = `Bạn là một chuyên gia ra đề thi. Dựa vào nội dung sau: "${content}". Hãy tạo 5 câu hỏi trắc nghiệm chất lượng. 
+      Trả về định dạng JSON thuần túy là một mảng danh sách theo mẫu:
+      [
+        {
+          "content": "Nội dung câu hỏi (có thể dùng $công_thức_toán$)",
+          "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+          "correctIndex": 0,
+          "explanation": "Lời giải chi tiết"
+        }
+      ]`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || 'Lỗi Gemini API');
+
+        const rawJson = data.candidates[0].content.parts[0].text;
+        const questions = JSON.parse(rawJson).map((q, i) => ({ ...q, id: 'ai-q-' + Date.now() + '-' + i }));
+
+        const newExam = { id: 'exam-' + Date.now(), title, duration, questions };
+        saveExams([newExam, ...state.exams]);
+
+        state.loading = false;
+        goHome();
+      } catch (e) {
+        state.loading = false;
+        state.errorMsg = 'Lỗi tạo đề: ' + e.message;
+        renderGenerator();
+      }
+    }
+
+    // --- ĐIỀU HƯỚNG & HÀM PHỤ ---
+    function goHome() {
+      if (state.timerId) clearInterval(state.timerId);
+      state.screen = 'home';
+      renderHome();
+    }
+
+    function goGenerator() {
+      state.screen = 'generator';
+      state.errorMsg = '';
+      renderGenerator();
+    }
+
     function startExam(examId) {
       state.currentExam = state.exams.find(e => e.id === examId);
+      if (!state.currentExam) return;
       state.userAnswers = {};
-      state.timeLeft = state.currentExam.duration * 60;
+      state.timeLeft = (state.currentExam.duration || 45) * 60;
       state.screen = 'exam';
       
       if (state.timerId) clearInterval(state.timerId);
@@ -248,13 +389,20 @@
       renderResult();
     }
 
-    function goHome() {
-      if (state.timerId) clearInterval(state.timerId);
-      state.screen = 'home';
+    function deleteExam(examId) {
+      if (confirm('Bạn có chắc muốn xóa đề thi này không?')) {
+        const list = state.exams.filter(e => e.id !== examId);
+        saveExams(list);
+        renderHome();
+      }
+    }
+
+    function resetDefaultExams() {
+      saveExams(defaultExams);
       renderHome();
     }
 
-    // Bắt đầu ứng dụng
+    // Khởi chạy app
     renderHome();
   </script>
 </body>
