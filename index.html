@@ -68,9 +68,16 @@
 const { useState, useEffect, useMemo, useRef } = React;
 
 /* ---------------------------------------------------------
-   0. CẤU HÌNH GEMINI API KEY & LƯU TRỮ ĐỀ (TỐI ĐA 30 ĐỀ)
+   0. CẤU HÌNH GEMINI API KEY & XỬ LÝ LỖI UNICODE PARSE JSON
 --------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
+
+function cleanAndParseJSON(rawText) {
+  let clean = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  // Escape các dấu gạch chéo ngược (\) không hợp lệ trong JSON do công thức LaTeX sinh ra
+  clean = clean.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+  return JSON.parse(clean);
+}
 
 async function callGemini(promptText, userApiKey) {
   const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
@@ -97,8 +104,7 @@ async function callGemini(promptText, userApiKey) {
 
   const data = await res.json();
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const cleanJson = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-  return JSON.parse(cleanJson);
+  return cleanAndParseJSON(rawText);
 }
 
 /* ---------------------------------------------------------
@@ -107,7 +113,7 @@ async function callGemini(promptText, userApiKey) {
 const BASE_GROUPS = [
   {
     id: "g1",
-    name: "Nhóm 1 · Hàm số",
+    name: "Nhóm 1 · Hàm số & Tư duy",
     questions: [
       { id:"g1q1", content:"Cho hàm số $y = -x^3 + 3x^2 + 2$. Số điểm cực trị của hàm số là:", options:["0","1","2","3"], correctIndex:2, explanation:"Đạo hàm $y' = -3x^2+6x = -3x(x-2)$ có hai nghiệm phân biệt $x=0$ và $x=2$, đổi dấu 2 lần nên có 2 cực trị." },
       { id:"g1q2", content:"Cho hàm số $y = x^4 - 2x^2 + 1$. Hàm số nghịch biến trên khoảng nào?", options:["$(-\\infty;-1)$","$(-1;0)$","$(0;1)$","$(1;+\\infty)$"], correctIndex:0, explanation:"$y' = 4x(x-1)(x+1) < 0$ trên $(-\\infty;-1)$ nên hàm số nghịch biến." },
@@ -118,7 +124,7 @@ const BASE_GROUPS = [
 const EXAM_MINUTES = 45;
 
 /* ---------------------------------------------------------
-   2. TIỆN ÍCH
+   2. TIỆN ÍCH HỖ TRỢ
 --------------------------------------------------------- */
 function shuffleArray(arr){
   const a = [...arr];
@@ -189,7 +195,7 @@ async function generateQuestionBank(sourceText, apiKey, onProgress){
   let all = [];
   for(const band of DIFFICULTY_BANDS){
     if(onProgress) onProgress(band);
-    const prompt = `Bạn là giáo viên Toán THPT. Câu hỏi gốc: "${sourceText}". Tạo đúng ${band.count} câu hỏi trắc nghiệm mới thuộc mức "${band.levelName}". Trả về MẢNG JSON gồm ${band.count} phần tử: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
+    const prompt = `Bạn là giáo viên ra đề thi. Câu hỏi gốc: "${sourceText}". Hãy tạo đúng ${band.count} câu hỏi trắc nghiệm mới cùng dạng hoặc mở rộng theo độ khó "${band.levelName}". Lưu ý: Nếu có ký tự đặc biệt hoặc công thức LaTeX, hãy viết cẩn thận. Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
     const parsed = await callGemini(prompt, apiKey);
     const qs = parsed.map((item, i) => ({
       id: "q-" + Date.now() + "-" + band.from + "-" + i,
@@ -296,7 +302,7 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
         <div>
           <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">1. Tên đề thi (Tùy chọn)</label>
           <input type="text" value={examTitle} onChange={e=>setExamTitle(e.target.value)}
-            placeholder="Nhập tên đề thi (ví dụ: Đề Ôn Tập Chương 1)..."
+            placeholder="Nhập tên đề thi (ví dụ: Đề Tư Duy Logic / Đề Hàm Số)..."
             className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
         </div>
 
@@ -309,12 +315,19 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
 
         <div>
           <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">3. Câu hỏi gốc để AI phát triển</label>
-          <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={4}
+          <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
             placeholder="Dán câu hỏi mẫu vào đây..."
             className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
         </div>
 
-        {error && <p className="text-sm text-[var(--danger)] font-semibold">{error}</p>}
+        {sourceText.trim() && (
+          <div className="bg-[#FAF9F5] rounded-xl p-3.5">
+            <p className="text-[11px] font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Xem trước câu gốc</p>
+            <MathText text={sourceText} className="text-sm text-[var(--ink)] leading-relaxed block" />
+          </div>
+        )}
+
+        {error && <p className="text-sm text-[var(--danger)] font-semibold break-words">{error}</p>}
 
         <button onClick={handleGenerate} disabled={loading}
           className="w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
@@ -329,8 +342,6 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
    6. MÀN HÌNH LÀM BÀI THI
 --------------------------------------------------------- */
 function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmit }){
-  const allQuestions = groups.flatMap(g=>g.questions);
-
   return (
     <div className="min-h-screen pb-12">
       <header className="border-b border-[#E4E1D8] bg-white/80 backdrop-blur sticky top-0 z-30">
@@ -399,7 +410,7 @@ function ResultScreen({ examTitle, groups, answers, result, onGoHome }){
 
         <button onClick={onGoHome}
           className="w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold hover:bg-[var(--accent-deep)] hover:text-white transition-colors">
-          🏠 Quay lại Sảnh chính để tiếp tục
+          🏠 Quay lại Sảnh chính
         </button>
       </div>
     </div>
@@ -407,10 +418,9 @@ function ResultScreen({ examTitle, groups, answers, result, onGoHome }){
 }
 
 /* ---------------------------------------------------------
-   8. PHẦN CỐT LÕI ứng dụng (APP)
+   8. PHẦN CỐT LÕI ỨNG DỤNG (APP)
 --------------------------------------------------------- */
 function App(){
-  // Khởi tạo danh sách đề thi từ localStorage hoặc mẫu có sẵn
   const [examList, setExamList] = useState(() => {
     const saved = localStorage.getItem("saved_exams");
     if(saved) {
@@ -427,17 +437,15 @@ function App(){
   const [currentExam, setCurrentExam] = useState(null);
   const [activeGroups, setActiveGroups] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [screen, setScreen] = useState("home"); // home, generator, exam, result
+  const [screen, setScreen] = useState("home");
   const [secondsLeft, setSecondsLeft] = useState(EXAM_MINUTES*60);
   const [result, setResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
 
-  // Lưu danh sách đề thi vào bộ nhớ máy
   useEffect(() => {
     localStorage.setItem("saved_exams", JSON.stringify(examList));
   }, [examList]);
 
-  // Đồng hồ đếm ngược
   useEffect(() => {
     if(screen !== "exam") return;
     if(secondsLeft <= 0){ handleSubmit(); return; }
@@ -462,11 +470,10 @@ function App(){
       groups: [{ id: "g-ai-" + Date.now(), name: "Nhóm câu hỏi AI", questions }]
     };
 
-    // Thêm đề mới và tự động xóa đề cũ nếu vượt quá 30 đề
     setExamList(prevList => {
       const updated = [newExam, ...prevList];
       if (updated.length > MAX_SAVED_EXAMS) {
-        return updated.slice(0, MAX_SAVED_EXAMS); // Giữ lại đúng 30 đề mới nhất
+        return updated.slice(0, MAX_SAVED_EXAMS);
       }
       return updated;
     });
