@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LuyệnThi.AI — Phòng thi trực tuyến Gemini AI</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --ink:#14213D;
+    --ink-soft:#4B5675;
+    --line:#E4E1D8;
+    --accent:#FCA311;
+    --accent-deep:#B9720A;
+    --success:#1E8F80;
+    --success-bg:#E7F5F1;
+    --danger:#D8434B;
+    --danger-bg:#FBEAEA;
+  }
+  html,body{ background:var(--paper); font-family:'Inter',sans-serif; color:var(--ink); }
+  .font-display{ font-family:'Sora',sans-serif; }
+  .font-mono-num{ font-family:'IBM Plex Mono',monospace; }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:#D8D3C4; border-radius:99px; }
+  .bubble{
+    width:30px; height:30px; border-radius:9999px; border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace;
+    font-weight:600; font-size:13px; color:var(--ink-soft); flex-shrink:0; transition:all .15s ease;
+  }
+  .option-btn{ transition:all .15s ease; }
+  .option-btn:hover .bubble{ border-color:var(--accent); }
+  .option-btn.selected .bubble{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .option-btn.selected{ background:#F1EEE5; border-color:var(--ink) !important; }
+  .nav-cell{
+    width:38px; height:38px; border-radius:10px; font-family:'IBM Plex Mono',monospace; font-weight:600;
+    font-size:12.5px; display:flex; align-items:center; justify-content:center; border:1.5px solid var(--line);
+    color:var(--ink-soft); transition:all .15s ease; cursor:pointer; background:#fff;
+  }
+  .nav-cell.answered{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .nav-cell:hover{ border-color:var(--accent); }
+  .modal-in{ animation:pop .22s cubic-bezier(.22,1,.36,1); }
+  @keyframes pop{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
+  .fade-in{ animation:fadein .3s ease; }
+  @keyframes fadein{ from{ opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .katex{ font-size:1.02em; }
+  .spinner{ border:3px solid #E4E1D8; border-top-color:var(--accent); border-radius:50%; width:28px; height:28px; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .pulse-red{ animation:pulsered 1s ease-in-out infinite; }
+  @keyframes pulsered{ 0%,100%{ opacity:1;} 50%{ opacity:.55;} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------------------------------------------------------
+   0. CẤU HÌNH GEMINI API KEY
+--------------------------------------------------------- */
+const GEMINI_API_KEY = "ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY"; // Lấy key miễn phí tại: https://aistudio.google.com/
+
+async function callGemini(promptText) {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === "ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY") {
+    throw new Error("Bạn chưa nhập GEMINI_API_KEY trong file HTML. Hãy mở file và dán key của bạn vào!");
+  }
+  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `Lỗi kết nối Gemini API (${res.status})`);
+  }
+
+  const data = await res.json();
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const cleanJson = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  return JSON.parse(cleanJson);
+}
+
+/* ---------------------------------------------------------
+   1. DỮ LIỆU ĐỀ GỐC MẪU
+--------------------------------------------------------- */
+const BASE_GROUPS = [
+  {
+    id: "g1",
+    name: "Nhóm 1 · Hàm số",
+    questions: [
+      { id:"g1q1", content:"Cho hàm số $y = -x^3 + 3x^2 + 2$. Số điểm cực trị của hàm số là:", options:["0","1","2","3"], correctIndex:2, explanation:"Đạo hàm $y' = -3x^2+6x = -3x(x-2)$ có hai nghiệm phân biệt $x=0$ và $x=2$, và đổi dấu qua hai nghiệm này, nên hàm số có 2 điểm cực trị." },
+      { id:"g1q2", content:"Cho hàm số $y = x^4 - 2x^2 + 1$. Hàm số nghịch biến trên khoảng nào sau đây?", options:["$(-\\infty;-1)$","$(-1;0)$","$(0;1)$","$(1;+\\infty)$"], correctIndex:0, explanation:"$y' = 4x^3-4x = 4x(x-1)(x+1)$. Xét dấu $y'$ trên từng khoảng, ta có $y'<0$ trên $(-\\infty;-1)$ nên hàm số nghịch biến trên khoảng này." },
+      { id:"g1q3", content:"Giá trị lớn nhất của hàm số $y = -x^2+4x-1$ trên $\\mathbb{R}$ là:", options:["3","-3","1","5"], correctIndex:0, explanation:"Đỉnh parabol đạt tại $x=2$, khi đó $y_{max}=-(2)^2+4\\cdot2-1=3$." },
+      { id:"g1q4", content:"Đường tiệm cận ngang của đồ thị hàm số $y=\\dfrac{2x+1}{x-3}$ là:", options:["$y=2$","$y=-3$","$y=3$","$y=\\dfrac{1}{3}$"], correctIndex:0, explanation:"Khi $x\\to\\pm\\infty$ thì $y\\to 2$, do đó đường tiệm cận ngang là $y=2$." },
+      { id:"g1q5", content:"Đồ thị hàm số $y = -x^3+3x^2+2$ cắt trục hoành tại bao nhiêu điểm?", options:["0","1","2","3"], correctIndex:1, explanation:"Hàm số đạt cực tiểu tại $x=0$ với $y=2>0$ và đạt cực đại tại $x=2$ với $y=6>0$. Vì hai giá trị cực trị đều dương nên đồ thị chỉ cắt trục hoành đúng 1 lần, ở nhánh giảm sau điểm cực đại." }
+    ]
+  },
+  {
+    id: "g2",
+    name: "Nhóm 2 · Hình học Oxyz",
+    questions: [
+      { id:"g2q1", content:"Trong không gian $Oxyz$, cho $A(1;2;-1)$, $B(3;-1;2)$. Độ dài đoạn thẳng $AB$ bằng:", options:["$\\sqrt{22}$","$22$","$4$","$\\sqrt{16}$"], correctIndex:0, explanation:"$\\vec{AB}=(2;-3;3)$ nên $AB=\\sqrt{2^2+(-3)^2+3^2}=\\sqrt{22}$." },
+      { id:"g2q2", content:"Mặt phẳng $(P): 2x - y + 3z - 5 = 0$ có một vectơ pháp tuyến là:", options:["$(2;-1;3)$","$(2;1;3)$","$(-2;-1;3)$","$(2;-1;-3)$"], correctIndex:0, explanation:"Mặt phẳng $ax+by+cz+d=0$ có vectơ pháp tuyến $(a;b;c)=(2;-1;3)$." },
+      { id:"g2q3", content:"Cho $A(0;0;0)$, $B(2;2;1)$. Tọa độ trung điểm $I$ của đoạn $AB$ là:", options:["$(1;1;\\frac{1}{2})$","$(2;2;1)$","$(1;1;1)$","$(\\frac{1}{2};\\frac{1}{2};\\frac{1}{2})$"], correctIndex:0, explanation:"Trung điểm có tọa độ là trung bình cộng tọa độ hai đầu mút: $I=(\\frac{0+2}{2};\\frac{0+2}{2};\\frac{0+1}{2})=(1;1;\\frac12)$." },
+      { id:"g2q4", content:"Phương trình mặt cầu tâm $I(1;-2;3)$, bán kính $r=4$ là:", options:["$(x-1)^2+(y+2)^2+(z-3)^2=16$","$(x+1)^2+(y-2)^2+(z+3)^2=16$","$(x-1)^2+(y+2)^2+(z-3)^2=4$","$(x-1)^2+(y+2)^2+(z-3)^2=8$"], correctIndex:0, explanation:"Mặt cầu tâm $I(a;b;c)$ bán kính $r$ có phương trình $(x-a)^2+(y-b)^2+(z-c)^2=r^2=16$." },
+      { id:"g2q5", content:"Cho $\\vec{a}=(1;2;-2)$, $\\vec{b}=(2;-1;2)$. Tích vô hướng $\\vec{a}.\\vec{b}$ bằng:", options:["$-4$","$4$","$0$","$8$"], correctIndex:0, explanation:"$\\vec{a}.\\vec{b}=1\\cdot2+2\\cdot(-1)+(-2)\\cdot2=2-2-4=-4$." }
+    ]
+  }
+];
+const EXAM_MINUTES = 45;
+
+/* ---------------------------------------------------------
+   2. TIỆN ÍCH
+--------------------------------------------------------- */
+function shuffleArray(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+const LETTERS = ["A","B","C","D"];
+
+function buildAttempt(groups, opts){
+  const shuffleQuestionOrder = !opts || opts.shuffleQuestionOrder !== false;
+  let n = 0;
+  return groups.map(g => ({
+    id: g.id,
+    name: g.name,
+    questions: (shuffleQuestionOrder ? shuffleArray(g.questions) : g.questions).map(q => {
+      n++;
+      const shuffledOpts = shuffleArray(q.options.map((text,idx)=>({text, isCorrect: idx===q.correctIndex})));
+      const options = shuffledOpts.map((o,i)=>({ key: LETTERS[i], text:o.text, isCorrect:o.isCorrect }));
+      const correctKey = options.find(o=>o.isCorrect).key;
+      return { id:q.id, num:n, content:q.content, explanation:q.explanation, options, correctKey, difficulty:q.difficulty };
+    })
+  }));
+}
+
+function escapeHtml(str){
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function renderLatexMix(text){
+  if(!text) return "";
+  const parts = String(text).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
+  return parts.map(part => {
+    if(part.length>3 && part.startsWith("$$") && part.endsWith("$$")){
+      try{ return window.katex.renderToString(part.slice(2,-2), {throwOnError:false, displayMode:true}); }
+      catch(e){ return escapeHtml(part); }
+    }
+    if(part.length>1 && part.startsWith("$") && part.endsWith("$")){
+      try{ return window.katex.renderToString(part.slice(1,-1), {throwOnError:false}); }
+      catch(e){ return escapeHtml(part); }
+    }
+    return escapeHtml(part).replace(/\n/g,"<br/>");
+  }).join("");
+}
+function MathText({ text, className }){
+  const html = useMemo(()=>renderLatexMix(text), [text]);
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+function formatClock(totalSeconds){
+  const s = Math.max(0, totalSeconds);
+  const m = Math.floor(s/60);
+  const sec = s%60;
+  return String(m).padStart(2,"0") + ":" + String(sec).padStart(2,"0");
+}
+function difficultyMeta(d){
+  if(!d) return null;
+  if(d<=4) return { label:"Nhận biết - Thông hiểu", bg:"#E7F5F1", fg:"#1E8F80" };
+  if(d<=8) return { label:"Vận dụng thấp", bg:"#FFF3DE", fg:"#B9720A" };
+  if(d<=11) return { label:"Vận dụng cao", bg:"#FDECE0", fg:"#C2571B" };
+  return { label:"Phân hóa", bg:"#FBEAEA", fg:"#D8434B" };
+}
+
+/* ---------------------------------------------------------
+   3. GEMINI AI: SINH ĐỀ LUYỆN TẬP CÂU SAI
+--------------------------------------------------------- */
+async function generateAdaptiveQuestion(sourceQuestion){
+  const prompt =
+`Bạn là giáo viên luyện thi THPT Quốc gia môn Toán tại Việt Nam.
+Học sinh vừa làm SAI câu hỏi trắc nghiệm sau:
+
+Đề bài: ${sourceQuestion.content}
+Đáp án đúng: ${sourceQuestion.correctText}
+Giải thích: ${sourceQuestion.explanation}
+
+Hãy tạo MỘT câu hỏi trắc nghiệm MỚI cùng dạng toán, cùng độ khó, nhưng đổi số liệu/ngữ cảnh. Đặt công thức LaTeX trong dấu $...$.
+
+Trả về JSON đúng định dạng:
+{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}`;
+
+  const parsed = await callGemini(prompt);
+  return {
+    id: sourceQuestion.id + "-ai-" + Math.random().toString(36).slice(2,8),
+    content: parsed.question,
+    options: parsed.options,
+    correctIndex: parsed.correctIndex,
+    explanation: parsed.explanation || ""
+  };
+}
+
+/* ---------------------------------------------------------
+   3b. GEMINI AI: SINH 12 CÂU TỪ 1 CÂU GỐC (ĐỘ KHÓ TĂNG DẦN)
+--------------------------------------------------------- */
+const DIFFICULTY_BANDS = [
+  { from:1, to:4, count:4, levelName:"Nhận biết - Thông hiểu", guidance:"Rất dễ, công thức trực tiếp, số liệu đẹp để làm quen." },
+  { from:5, to:8, count:4, levelName:"Vận dụng thấp", guidance:"Độ khó trung bình, cần 2-3 bước biến đổi." },
+  { from:9, to:11, count:3, levelName:"Vận dụng cao", guidance:"Khó, có bẫy hoặc cần tính toán nhiều bước." },
+  { from:12, to:12, count:1, levelName:"Phân hóa", guidance:"Câu hỏi chốt chặn, đòi hỏi tư duy sâu nhất." }
+];
+
+async function fetchDifficultyBand(sourceText, band){
+  const prompt =
+`Bạn là giáo viên Toán luyện thi THPT.
+Câu hỏi gốc: "${sourceText}"
+
+Tạo đúng ${band.count} câu hỏi trắc nghiệm mới thuộc mức độ "${band.levelName}" (khung độ khó ${band.from}-${band.to}/12).
+Đặc điểm: ${band.guidance}
+Định dạng công thức toán trong dấu $...$.
+
+Trả về một MẢNG JSON duy nhất gồm ${band.count} phần tử:
+[{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
+
+  const parsed = await callGemini(prompt);
+  return parsed.map((item, i) => ({
+    id: "bank-" + band.from + "-" + i + "-" + Math.random().toString(36).slice(2,7),
+    content: item.question,
+    options: item.options,
+    correctIndex: item.correctIndex,
+    explanation: item.explanation || "",
+    difficulty: band.from + i
+  }));
+}
+
+async function generateQuestionBank(sourceText, onProgress){
+  let all = [];
+  for(const band of DIFFICULTY_BANDS){
+    if(onProgress) onProgress(band);
+    const qs = await fetchDifficultyBand(sourceText, band);
+    all = all.concat(qs);
+  }
+  return all;
+}
+
+/* ---------------------------------------------------------
+   4. KHUNG THẢO LUẬN LƯU VÀO LOCALSTORAGE
+--------------------------------------------------------- */
+function DiscussionThread({ qid }){
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    if(open) {
+      const saved = localStorage.getItem("discuss:" + qid);
+      setComments(saved ? JSON.parse(saved) : []);
+    }
+  }, [open, qid]);
+
+  function post(){
+    if(!msg.trim()) return;
+    const entry = { author: name.trim() || "Ẩn danh", text: msg.trim(), ts: Date.now() };
+    const updated = [...comments, entry];
+    localStorage.setItem("discuss:" + qid, JSON.stringify(updated));
+    setComments(updated);
+    setMsg("");
+  }
+
+  return (
+    <div className="mt-4 border-t border-[#E4E1D8] pt-3">
+      <button onClick={()=>setOpen(o=>!o)} className="text-sm font-semibold text-[#14213D] flex items-center gap-1.5 hover:text-[var(--accent-deep)]">
+        <span>💬 Thảo luận &amp; Hỏi đáp</span>
+        <span className="text-[#9AA5B1] font-normal">({comments.length})</span>
+        <span className="text-xs text-[#9AA5B1]">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 fade-in">
+          {comments.length===0 && (
+            <p className="text-sm text-[#9AA5B1] italic">Chưa có thảo luận nào. Hãy gửi bình luận đầu tiên!</p>
+          )}
+          {comments.length>0 && (
+            <div className="space-y-2.5 mb-3 max-h-56 overflow-y-auto pr-1">
+              {comments.map((c,i)=>(
+                <div key={i} className="bg-[#FAF9F5] rounded-lg px-3 py-2 text-sm">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-semibold text-[#14213D]">{c.author}</span>
+                    <span className="text-[11px] text-[#9AA5B1]">{new Date(c.ts).toLocaleString("vi-VN")}</span>
+                  </div>
+                  <p className="text-[#3C4A6B] mt-0.5">{c.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tên của bạn"
+              className="sm:w-48 text-sm px-3 py-2 rounded-lg border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+            <input value={msg} onChange={e=>setMsg(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") post(); }}
+              placeholder="Đặt câu hỏi hoặc chia sẻ ý kiến…"
+              className="flex-1 text-sm px-3 py-2 rounded-lg border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+            <button onClick={post}
+              className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--ink)] text-white hover:bg-[#243357]">
+              Gửi
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   5. MODAL GIÁM SÁT
+--------------------------------------------------------- */
+function MonitorModal({ onConfirm }){
+  return (
+    <div className="fixed inset-0 z-50 bg-[#14213D]/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="modal-in bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl">
+        <div className="w-14 h-14 rounded-full bg-[#FFF3DE] text-[var(--accent-deep)] flex items-center justify-center text-2xl mx-auto mb-4">
+          👁️
+        </div>
+        <h2 className="font-display font-bold text-lg text-[var(--ink)] mb-2">Bài thi đang được giám sát</h2>
+        <p className="text-sm text-[#4B5675] leading-relaxed mb-6">
+          Hệ thống ghi nhận thời gian làm bài. Vui lòng không chuyển tab hoặc thoát màn hình.
+        </p>
+        <button onClick={onConfirm}
+          className="w-full py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors">
+          Xác nhận, bắt đầu làm bài
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   6. MÀN HÌNH LÀM BÀI
+--------------------------------------------------------- */
+function OptionBubble({ opt, selected, onSelect }){
+  return (
+    <button onClick={onSelect}
+      className={"option-btn flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border border-[#E4E1D8] w-full " + (selected ? "selected" : "bg-white hover:border-[#C9C3B2]")}>
+      <span className="bubble">{opt.key}</span>
+      <MathText text={opt.text} className="text-sm text-[#26324A]" />
+    </button>
+  );
+}
+
+function QuestionCard({ q, answer, onSelect }){
+  return (
+    <div id={"q-"+q.id} className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4 scroll-mt-24">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="font-mono-num text-xs font-semibold px-2.5 py-1 rounded-md bg-[#F1EEE5] text-[var(--ink)]">
+          Câu {String(q.num).padStart(2,"0")}
+        </span>
+        {q.difficulty && (
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md" style={{background:difficultyMeta(q.difficulty).bg, color:difficultyMeta(q.difficulty).fg}}>
+            Mức {q.difficulty}/12 · {difficultyMeta(q.difficulty).label}
+          </span>
+        )}
+      </div>
+      <MathText text={q.content} className="text-[15px] text-[var(--ink)] font-medium leading-relaxed block mb-4" />
+      <div className="grid sm:grid-cols-2 gap-2.5">
+        {q.options.map(opt => (
+          <OptionBubble key={opt.key} opt={opt} selected={answer===opt.key} onSelect={()=>onSelect(q.id, opt.key)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NavGrid({ groups, answers, onJump }){
+  return (
+    <div className="bg-white rounded-2xl border border-[#E4E1D8] p-4">
+      <h3 className="font-display text-sm font-semibold text-[var(--ink)] mb-3">Danh sách câu hỏi</h3>
+      {groups.map(g => (
+        <div key={g.id} className="mb-3 last:mb-0">
+          <p className="text-[11px] font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1.5">{g.name}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {g.questions.map(q => (
+              <div key={q.id} onClick={()=>onJump(q.id)}
+                className={"nav-cell " + (answers[q.id] ? "answered" : "")}>
+                {String(q.num).padStart(2,"0")}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExamScreen({ groups, answers, onSelect, secondsLeft, onSubmit, attemptCount }){
+  const allQuestions = groups.flatMap(g=>g.questions);
+  const answeredCount = Object.keys(answers).length;
+  const isLow = secondsLeft <= 300;
+
+  function jump(qid){
+    const el = document.getElementById("q-"+qid);
+    if(el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+  }
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-[#E4E1D8] bg-white/80 backdrop-blur sticky top-0 z-30">
+        <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-3.5 flex items-center justify-between">
+          <div>
+            <h1 className="font-display font-bold text-[var(--ink)] text-base sm:text-lg">LuyệnThi.AI (Gemini)</h1>
+            <p className="text-xs text-[#9AA5B1]">Đề luyện tập trắc nghiệm · lượt làm thứ {attemptCount}</p>
+          </div>
+          <div className="text-xs text-[#9AA5B1] hidden sm:block">Thời gian: {EXAM_MINUTES} phút · Làm lại không giới hạn</div>
+        </div>
+      </header>
+
+      <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 p-4 lg:p-8">
+        <main>
+          {groups.map(g => (
+            <div key={g.id} className="mb-6">
+              <h2 className="font-display font-bold text-[var(--ink)] mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-[var(--accent)] rounded-full inline-block"></span>
+                {g.name}
+              </h2>
+              {g.questions.map(q => (
+                <QuestionCard key={q.id} q={q} answer={answers[q.id]} onSelect={onSelect} />
+              ))}
+            </div>
+          ))}
+        </main>
+
+        <aside className="lg:sticky lg:top-20 h-fit space-y-4">
+          <div className="bg-white rounded-2xl border border-[#E4E1D8] p-4 text-center">
+            <p className="text-xs font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Thời gian còn lại</p>
+            <p className={"font-mono-num text-3xl font-bold " + (isLow ? "text-[var(--danger)] pulse-red" : "text-[var(--ink)]")}>
+              {formatClock(secondsLeft)}
+            </p>
+            <p className="text-xs text-[#9AA5B1] mt-1">Đã trả lời {answeredCount}/{allQuestions.length} câu</p>
+          </div>
+
+          <NavGrid groups={groups} answers={answers} onJump={jump} />
+
+          <button onClick={onSubmit}
+            className="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-semibold hover:bg-[#243357] transition-colors">
+            Nộp bài
+          </button>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   7. MÀN HÌNH KẾT QUẢ
+--------------------------------------------------------- */
+function ReviewCard({ q, userKey }){
+  const isCorrect = userKey === q.correctKey;
+  return (
+    <div className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="font-mono-num text-xs font-semibold px-2.5 py-1 rounded-md bg-[#F1EEE5] text-[var(--ink)]">
+          Câu {String(q.num).padStart(2,"0")}
+        </span>
+        {q.difficulty && (
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md" style={{background:difficultyMeta(q.difficulty).bg, color:difficultyMeta(q.difficulty).fg}}>
+            Mức {q.difficulty}/12 · {difficultyMeta(q.difficulty).label}
+          </span>
+        )}
+        {userKey ? (
+          <span className={"text-xs font-semibold px-2.5 py-1 rounded-md " + (isCorrect ? "bg-[var(--success-bg)] text-[var(--success)]" : "bg-[var(--danger-bg)] text-[var(--danger)]")}>
+            {isCorrect ? "Đúng" : "Sai"}
+          </span>
+        ) : (
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-[#F1EEE5] text-[#9AA5B1]">Bỏ trống</span>
+        )}
+      </div>
+      <MathText text={q.content} className="text-[15px] text-[var(--ink)] font-medium leading-relaxed block mb-4" />
+      <div className="grid sm:grid-cols-2 gap-2.5 mb-4">
+        {q.options.map(opt => {
+          let cls = "bg-white border-[#E4E1D8]";
+          if(opt.key === q.correctKey) cls = "bg-[var(--success-bg)] border-[var(--success)]";
+          else if(opt.key === userKey) cls = "bg-[var(--danger-bg)] border-[var(--danger)]";
+          return (
+            <div key={opt.key} className={"flex items-center gap-3 px-3 py-2.5 rounded-xl border " + cls}>
+              <span className="bubble" style={opt.key===q.correctKey ? {background:"var(--success)",borderColor:"var(--success)",color:"#fff"} : opt.key===userKey ? {background:"var(--danger)",borderColor:"var(--danger)",color:"#fff"} : {}}>{opt.key}</span>
+              <MathText text={opt.text} className="text-sm text-[#26324A]" />
+            </div>
+          );
+        })}
+      </div>
+      <div className="bg-[#FFF8EB] border border-[#F3E3BC] rounded-xl p-3.5">
+        <p className="text-xs font-semibold text-[var(--accent-deep)] uppercase tracking-wide mb-1">Lời giải chi tiết</p>
+        <MathText text={q.explanation} className="text-sm text-[#4B5675] leading-relaxed block" />
+      </div>
+      <DiscussionThread qid={q.id} />
+    </div>
+  );
+}
+
+function ResultScreen({ groups, answers, result, attemptCount, onRetry, onAIRetry, loadingAI }){
+  const allQuestions = groups.flatMap(g=>g.questions);
+  const wrongCount = allQuestions.filter(q => answers[q.id] !== q.correctKey).length;
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-[#E4E1D8] bg-white/80 backdrop-blur sticky top-0 z-30">
+        <div className="max-w-[900px] mx-auto px-4 lg:px-8 py-3.5">
+          <h1 className="font-display font-bold text-[var(--ink)] text-base sm:text-lg">LuyệnThi.AI</h1>
+          <p className="text-xs text-[#9AA5B1]">Kết quả · lượt làm thứ {attemptCount}</p>
+        </div>
+      </header>
+
+      <div className="max-w-[900px] mx-auto p-4 lg:p-8">
+        <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 mb-6 text-center">
+          {result.auto && <p className="text-xs font-semibold text-[var(--danger)] mb-2">⏱ Đã hết giờ — bài thi được tự động nộp</p>}
+          <p className="text-xs font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Điểm số</p>
+          <p className="font-display text-5xl font-extrabold text-[var(--ink)] mb-3">{result.score.toFixed(2)}</p>
+          <div className="flex justify-center gap-6 text-sm">
+            <div><span className="font-semibold text-[var(--success)]">{result.correctCount}</span> <span className="text-[#9AA5B1]">câu đúng</span></div>
+            <div><span className="font-semibold text-[var(--danger)]">{result.total - result.correctCount}</span> <span className="text-[#9AA5B1]">câu sai</span></div>
+            <div><span className="font-semibold text-[var(--ink)]">{formatClock(result.elapsedSeconds)}</span> <span className="text-[#9AA5B1]">thời gian</span></div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+            <button onClick={onRetry}
+              className="flex-1 py-3 rounded-xl border-2 border-[var(--ink)] text-[var(--ink)] font-semibold hover:bg-[var(--ink)] hover:text-white transition-colors">
+              Làm lại · đề ngẫu nhiên
+            </button>
+            <button onClick={onAIRetry} disabled={wrongCount===0 || loadingAI}
+              className="flex-1 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {loadingAI ? <><span className="spinner !w-4 !h-4 !border-2"></span> Gemini đang tạo đề…</> :
+                wrongCount===0 ? "Bạn đã đúng hết! 🎉" : `✨ Luyện lại bằng Gemini AI (${wrongCount} câu sai)`}
+            </button>
+          </div>
+        </div>
+
+        {groups.map(g => (
+          <div key={g.id} className="mb-6">
+            <h2 className="font-display font-bold text-[var(--ink)] mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-[var(--accent)] rounded-full inline-block"></span>
+              {g.name}
+            </h2>
+            {g.questions.map(q => (
+              <ReviewCard key={q.id} q={q} userKey={answers[q.id]} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   7b. MÀN HÌNH CHỌN CHẾ ĐỘ & BỘ TẠO ĐỀ BẰNG GEMINI
+--------------------------------------------------------- */
+function HomeScreen({ onStartSample, onOpenGenerator }){
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full">
+        <div className="text-center mb-8">
+          <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-[var(--ink)] mb-2">LuyệnThi.AI</h1>
+          <p className="text-sm text-[#4B5675]">Trang web luyện đề thông minh hỗ trợ bởi Google Gemini</p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <button onClick={onStartSample}
+            className="text-left bg-white rounded-2xl border border-[#E4E1D8] p-5 hover:border-[var(--ink)] transition-colors">
+            <div className="w-11 h-11 rounded-xl bg-[#F1EEE5] flex items-center justify-center text-xl mb-3">📝</div>
+            <h3 className="font-display font-bold text-[var(--ink)] mb-1">Luyện đề mẫu có sẵn</h3>
+            <p className="text-sm text-[#4B5675]">Vào phòng thi với bộ câu hỏi có sẵn, tự động xáo trộn câu và đáp án.</p>
+          </button>
+          <button onClick={onOpenGenerator}
+            className="text-left bg-white rounded-2xl border border-[#E4E1D8] p-5 hover:border-[var(--ink)] transition-colors">
+            <div className="w-11 h-11 rounded-xl bg-[#FFF3DE] flex items-center justify-center text-xl mb-3">✨</div>
+            <h3 className="font-display font-bold text-[var(--ink)] mb-1">Tạo đề bằng Gemini AI</h3>
+            <p className="text-sm text-[#4B5675]">Dán 1 câu hỏi, Gemini AI tự động sinh 12 câu tương tự từ dễ đến phân hóa.</p>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GeneratorScreen({ onBack, onGenerated }){
+  const [sourceText, setSourceText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [progressLabel, setProgressLabel] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleGenerate(){
+    if(!sourceText.trim()){ setError("Vui lòng dán nội dung câu hỏi gốc."); return; }
+    setError("");
+    setLoading(true);
+    try{
+      const questions = await generateQuestionBank(sourceText.trim(), band => {
+        setProgressLabel(`Gemini đang tạo câu ${band.from}${band.from!==band.to ? "-"+band.to : ""}/12 (${band.levelName})…`);
+      });
+      if(questions.length === 0) throw new Error("Không nhận được câu hỏi từ Gemini.");
+      onGenerated(questions);
+    }catch(e){
+      setError("Lỗi tạo câu hỏi: " + e.message);
+    }
+    setLoading(false);
+    setProgressLabel("");
+  }
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-[#E4E1D8] bg-white/80 backdrop-blur sticky top-0 z-30">
+        <div className="max-w-3xl mx-auto px-4 lg:px-8 py-3.5 flex items-center gap-3">
+          <button onClick={onBack} className="text-sm text-[#4B5675] hover:text-[var(--ink)]">← Quay lại</button>
+          <h1 className="font-display font-bold text-[var(--ink)] text-base sm:text-lg">Bộ tạo đề bằng Gemini AI</h1>
+        </div>
+      </header>
+
+      <div className="max-w-3xl mx-auto p-4 lg:p-8">
+        <div className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
+          <label className="text-sm font-semibold text-[var(--ink)] mb-2 block">Dán 1 câu hỏi gốc vào đây (hỗ trợ công thức $...$)</label>
+          <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
+            placeholder="Ví dụ: Cho hàm số $y=-x^3+3x^2+2$. Số điểm cực trị của hàm số là bao nhiêu?"
+            className="w-full text-sm px-3.5 py-3 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
+
+          {sourceText.trim() && (
+            <div className="mt-3 bg-[#FAF9F5] rounded-xl p-3.5">
+              <p className="text-[11px] font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Xem trước</p>
+              <MathText text={sourceText} className="text-sm text-[var(--ink)] leading-relaxed block" />
+            </div>
+          )}
+
+          {error && <p className="text-sm text-[var(--danger)] mt-3 font-semibold">{error}</p>}
+
+          <button onClick={handleGenerate} disabled={loading}
+            className="mt-4 w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <><span className="spinner !w-4 !h-4 !border-2"></span> {progressLabel || "Đang xử lý…"}</> : "✨ Gemini AI Tạo bộ 12 câu hỏi"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   8. CHƯƠNG TRÌNH CHÍNH (APP)
+--------------------------------------------------------- */
+function App(){
+  const [groups, setGroups] = useState(() => buildAttempt(BASE_GROUPS));
+  const [answers, setAnswers] = useState({});
+  const [screen, setScreen] = useState("home");
+  const [showMonitor, setShowMonitor] = useState(true);
+  const [secondsLeft, setSecondsLeft] = useState(EXAM_MINUTES*60);
+  const [result, setResult] = useState(null);
+  const [attemptCount, setAttemptCount] = useState(1);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const startTimeRef = useRef(null);
+  const expiredRef = useRef(false);
+
+  useEffect(() => {
+    if(showMonitor || screen !== "exam") return;
+    if(secondsLeft <= 0){
+      if(!expiredRef.current){ expiredRef.current = true; handleSubmit(true); }
+      return;
+    }
+    const t = setTimeout(()=>setSecondsLeft(s=>s-1), 1000);
+    return () => clearTimeout(t);
+  }, [secondsLeft, showMonitor, screen]);
+
+  function handleStart(){
+    setShowMonitor(false);
+    startTimeRef.current = Date.now();
+  }
+
+  function handleSelect(qid, key){
+    setAnswers(prev => ({ ...prev, [qid]: key }));
+  }
+
+  function handleSubmit(auto){
+    if(!auto && !window.confirm("Bạn có chắc chắn muốn nộp bài?")) return;
+    const allQuestions = groups.flatMap(g=>g.questions);
+    const correctCount = allQuestions.filter(q => answers[q.id] === q.correctKey).length;
+    const total = allQuestions.length;
+    const elapsedSeconds = startTimeRef.current ? Math.round((Date.now()-startTimeRef.current)/1000) : EXAM_MINUTES*60 - secondsLeft;
+    const score = total ? (correctCount/total)*10 : 0;
+    setResult({ score, correctCount, total, elapsedSeconds, auto: !!auto });
+    setScreen("result");
+  }
+
+  function resetToNewAttempt(newGroups){
+    setGroups(newGroups);
+    setAnswers({});
+    setResult(null);
+    setSecondsLeft(EXAM_MINUTES*60);
+    expiredRef.current = false;
+    setScreen("exam");
+    setShowMonitor(true);
+    setAttemptCount(c=>c+1);
+  }
+
+  function handleStartSample(){
+    resetToNewAttempt(buildAttempt(BASE_GROUPS));
+  }
+
+  function handleBankGenerated(questions){
+    const bankGroup = [{ id:"bank-"+Date.now(), name:"Ngân hàng 12 câu do Gemini AI sinh ra", questions }];
+    resetToNewAttempt(buildAttempt(bankGroup, { shuffleQuestionOrder:false }));
+  }
+
+  async function handleAIRetry(){
+    const allQuestions = groups.flatMap(g=>g.questions);
+    const wrongOnes = allQuestions
+      .filter(q => answers[q.id] !== q.correctKey)
+      .map(q => ({ ...q, correctText: q.options.find(o=>o.key===q.correctKey).text }));
+    if(wrongOnes.length === 0) return;
+
+    setLoadingAI(true);
+    const generated = [];
+    for(const q of wrongOnes){
+      try{
+        const newQ = await generateAdaptiveQuestion(q);
+        generated.push(newQ);
+      }catch(e){
+        generated.push({ id:q.id+"-retry", content:q.content, options:q.options.map(o=>o.text), correctIndex:q.options.findIndex(o=>o.key===q.correctKey), explanation:q.explanation });
+      }
+    }
+    setLoadingAI(false);
+
+    const aiGroup = [{ id:"ai-"+Date.now(), name:"Nhóm luyện tập Gemini AI · Dựa trên các câu làm sai", questions: generated }];
+    resetToNewAttempt(buildAttempt(aiGroup));
+  }
+
+  return (
+    <div style={{ background:"var(--paper)" }}>
+      {showMonitor && screen==="exam" && <MonitorModal onConfirm={handleStart} />}
+      {loadingAI && (
+        <div className="fixed inset-0 z-50 bg-[#14213D]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="modal-in bg-white rounded-2xl px-8 py-7 text-center shadow-2xl flex flex-col items-center gap-3">
+            <div className="spinner"></div>
+            <p className="font-display font-semibold text-[var(--ink)]">Gemini AI đang tạo bài luyện tập dựa trên câu bạn làm sai…</p>
+          </div>
+        </div>
+      )}
+      {screen === "home" && (
+        <HomeScreen onStartSample={handleStartSample} onOpenGenerator={()=>setScreen("generator")} />
+      )}
+      {screen === "generator" && (
+        <GeneratorScreen onBack={()=>setScreen("home")} onGenerated={handleBankGenerated} />
+      )}
+      {screen === "exam" && (
+        <ExamScreen groups={groups} answers={answers} onSelect={handleSelect}
+          secondsLeft={secondsLeft} onSubmit={()=>handleSubmit(false)} attemptCount={attemptCount} />
+      )}
+      {screen === "result" && (
+        <ResultScreen groups={groups} answers={answers} result={result} attemptCount={attemptCount}
+          onRetry={handleStartSample} onAIRetry={handleAIRetry} loadingAI={loadingAI} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
