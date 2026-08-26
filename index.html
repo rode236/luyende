@@ -14,7 +14,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/React/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
 <style>
   :root{
@@ -51,8 +50,8 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel">
-const { useState, useEffect, useMemo } = React;
+<script>
+const { useState, useEffect, useMemo, createElement: h } = React;
 
 const MAX_SAVED_EXAMS = 30;
 
@@ -67,8 +66,7 @@ function cleanAndParseJSON(rawText) {
     const start = clean.indexOf("[");
     const end = clean.lastIndexOf("]");
     if (start !== -1 && end !== -1 && end > start) {
-      const extracted = clean.substring(start, end + 1);
-      return JSON.parse(extracted);
+      return JSON.parse(clean.substring(start, end + 1));
     }
     throw err;
   }
@@ -100,9 +98,7 @@ async function requestGemini(modelName, promptText, apiKey) {
 
 async function callGemini(promptText, userApiKey) {
   const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error("Vui lòng nhập Gemini API Key của bạn!");
-  }
+  if (!apiKey || !apiKey.trim()) throw new Error("Vui lòng nhập Gemini API Key!");
 
   try {
     return await requestGemini("gemini-1.5-flash", promptText, apiKey);
@@ -171,7 +167,7 @@ function renderLatexMix(text){
 }
 function MathText({ text, className }){
   const html = useMemo(()=>renderLatexMix(text), [text]);
-  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  return h("span", { className: className, dangerouslySetInnerHTML: { __html: html } });
 }
 function formatClock(totalSeconds){
   const s = Math.max(0, totalSeconds);
@@ -191,7 +187,7 @@ async function generateQuestionBank(sourceText, standard, apiKey, onProgress){
   let all = [];
   for(const band of DIFFICULTY_BANDS){
     if(onProgress) onProgress(band);
-    const prompt = 'Bạn là chuyên gia khảo thí uy tín. Định hướng / Chuẩn đề thi: "' + standard + '". Dựa vào nguồn/kiến thức trọng tâm sau: "' + sourceText + '". Hãy tạo đúng ' + band.count + ' câu hỏi trắc nghiệm mới bám sát định hướng ở mức độ "' + band.levelName + '" (' + band.guidance + '). Tránh câu hỏi đánh đố phi thực tế. Trả về MẢNG JSON duy nhất gồm ' + band.count + ' phần tử dạng: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]';
+    const prompt = 'Bạn là chuyên gia khảo thí uy tín. Định hướng: "' + standard + '". Dựa vào kiến thức: "' + sourceText + '". Hãy tạo đúng ' + band.count + ' câu hỏi trắc nghiệm bám sát mức độ "' + band.levelName + '". Trả về MẢNG JSON gồm ' + band.count + ' phần tử: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]';
 
     const parsed = await callGemini(prompt, apiKey);
     const qs = parsed.map((item, i) => ({
@@ -208,53 +204,35 @@ async function generateQuestionBank(sourceText, standard, apiKey, onProgress){
 }
 
 function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
-  return (
-    <div className="min-h-screen p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-[var(--ink)]">Sảnh Thi Trực Tuyến</h1>
-            <p className="text-sm text-[#4B5675] mt-1">Kho lưu trữ đề thi chung cho mọi người cùng ôn tập và luyện thi</p>
-          </div>
-          <button onClick={onOpenGenerator}
-            className="px-5 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors shadow-sm flex items-center gap-2">
-            ✨ Tạo đề mới bằng AI
-          </button>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-bold text-lg text-[var(--ink)]">
-              Danh sách đề thi ({examList.length}/{MAX_SAVED_EXAMS})
-            </h2>
-            <span className="text-xs text-[#9AA5B1]">Hệ thống tự động dọn dẹp các đề cũ nhất khi vượt quá 30 đề</span>
-          </div>
-
-          <div className="grid gap-3">
-            {examList.map((item, idx) => (
-              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[#E4E1D8] hover:border-[var(--ink)] bg-[#FAF9F5] transition-all gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono-num font-bold px-2 py-0.5 rounded bg-[#E4E1D8] text-[var(--ink)]">
-                      Đề #{examList.length - idx}
-                    </span>
-                    <span className="text-xs text-[#9AA5B1]">{item.createdAt}</span>
-                    <span className="text-xs text-[var(--ink-soft)] font-medium">⏱️ {item.durationMinutes || 45} phút</span>
-                    {item.standard && <span className="text-xs text-[var(--accent-deep)] bg-[#FEF3C7] px-2 py-0.5 rounded font-medium">{item.standard}</span>}
-                  </div>
-                  <h3 className="font-semibold text-base text-[var(--ink)]">{item.title}</h3>
-                  <p className="text-xs text-[#4B5675] mt-0.5">{item.groups.reduce((acc, g) => acc + g.questions.length, 0)} câu hỏi trắc nghiệm</p>
-                </div>
-                <button onClick={() => onSelectExam(item)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg bg-[var(--ink)] text-white text-sm font-semibold hover:bg-[#243357] transition-colors">
-                  Vào thi →
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+  return h("div", { className: "min-h-screen p-4 sm:p-8" },
+    h("div", { className: "max-w-4xl mx-auto" },
+      h("div", { className: "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8" },
+        h("div", null,
+          h("h1", { className: "font-display font-extrabold text-2xl sm:text-3xl text-[var(--ink)]" }, "Sảnh Thi Trực Tuyến"),
+          h("p", { className: "text-sm text-[#4B5675] mt-1" }, "Kho lưu trữ đề thi chung cho mọi người cùng ôn tập")
+        ),
+        h("button", { onClick: onOpenGenerator, className: "px-5 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors shadow-sm" }, "✨ Tạo đề mới bằng AI")
+      ),
+      h("div", { className: "bg-white rounded-2xl border border-[#E4E1D8] p-6" },
+        h("div", { className: "flex items-center justify-between mb-4" },
+          h("h2", { className: "font-display font-bold text-lg text-[var(--ink)]" }, "Danh sách đề thi (" + examList.length + "/" + MAX_SAVED_EXAMS + ")"),
+          h("span", { className: "text-xs text-[#9AA5B1]" }, "Tự động dọn dẹp đề cũ khi đầy")
+        ),
+        h("div", { className: "grid gap-3" },
+          examList.map((item, idx) => h("div", { key: item.id, className: "flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[#E4E1D8] bg-[#FAF9F5] gap-3" },
+            h("div", null,
+              h("div", { className: "flex items-center gap-2 mb-1" },
+                h("span", { className: "text-xs font-mono-num font-bold px-2 py-0.5 rounded bg-[#E4E1D8]" }, "Đề #" + (examList.length - idx)),
+                h("span", { className: "text-xs text-[#9AA5B1]" }, item.createdAt),
+                h("span", { className: "text-xs text-[var(--ink-soft)] font-medium" }, "⏱️ " + (item.durationMinutes || 45) + " phút")
+              ),
+              h("h3", { className: "font-semibold text-base text-[var(--ink)]" }, item.title)
+            ),
+            h("button", { onClick: () => onSelectExam(item), className: "w-full sm:w-auto px-4 py-2 rounded-lg bg-[var(--ink)] text-white text-sm font-semibold" }, "Vào thi →")
+          ))
+        )
+      )
+    )
   );
 }
 
@@ -269,233 +247,112 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey, initialSource
 
   async function handleGenerate(){
     if(!apiKey || !apiKey.trim()){ setError("Vui lòng nhập Gemini API Key!"); return; }
-    if(!sourceText.trim()){ setError("Vui lòng nhập nội dung hoặc câu hỏi gốc!"); return; }
-    if(!durationMinutes || durationMinutes <= 0){ setError("Thời gian làm bài phải lớn hơn 0 phút!"); return; }
-    setError("");
-    setLoading(true);
+    if(!sourceText.trim()){ setError("Vui lòng nhập nội dung!"); return; }
+    setError(""); setLoading(true);
     localStorage.setItem("user_gemini_key", apiKey.trim());
 
     try{
       const questions = await generateQuestionBank(sourceText.trim(), standard, apiKey.trim(), band => {
-        setProgressLabel("Gemini đang tạo câu " + band.from + (band.from!==band.to ? "-" + band.to : "") + "/12...");
+        setProgressLabel("Gemini đang tạo câu " + band.from + "/12...");
       });
-      
-      const title = examTitle.trim() || ("Đề ôn tập (" + standard + ") - " + sourceText.trim().slice(0, 20) + "...");
+      const title = examTitle.trim() || ("Đề ôn tập - " + sourceText.trim().slice(0, 20) + "...");
       onGenerated(title, questions, standard, Number(durationMinutes));
     }catch(e){
-      setError("Lỗi tạo câu hỏi: " + e.message);
+      setError("Lỗi: " + e.message);
     }
-    setLoading(false);
-    setProgressLabel("");
+    setLoading(false); setProgressLabel("");
   }
 
-  return (
-    <div className="min-h-screen p-4 sm:p-8 max-w-3xl mx-auto">
-      <button onClick={onBack} className="text-sm text-[#4B5675] hover:text-[var(--ink)] mb-4">← Quay lại Sảnh chính</button>
-      <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 space-y-4">
-        <h2 className="font-display font-bold text-xl text-[var(--ink)]">Tạo bộ đề 12 câu thông minh bằng AI</h2>
-
-        <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">1. Chuẩn độ khung định hướng cho AI (Quan trọng)</label>
-          <select value={standard} onChange={e=>setStandard(e.target.value)}
-            className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] bg-white focus:outline-none focus:border-[var(--accent)] font-medium">
-            <option value="Kỳ thi tốt nghiệp THPT Quốc gia">Chuẩn THPT Quốc gia (Bám sát cấu trúc đề Bộ GD&ĐT)</option>
-            <option value="Đánh giá năng lực ĐHQG TP.HCM (VNU-HCM)">Đánh giá năng lực ĐHQG TP.HCM (Logic, Tư duy, Giải quyết vấn đề)</option>
-            <option value="Đánh giá năng lực ĐHQG Hà Nội (VNU-Hanoi)">Đánh giá năng lực ĐHQG Hà Nội (Tư duy định lượng & Khoa học)</option>
-            <option value="Đánh giá tư duy ĐH Bách Khoa Hà Nội (TSA)">Đánh giá tư duy Đại học Bách Khoa Hà Nội (TSA)</option>
-            <option value="Kiểm tra đánh giá chất lượng cơ bản">Ôn tập kiến thức cơ bản / Luyện tập hàng ngày</option>
-          </select>
-          <p className="text-xs text-[#9AA5B1] mt-1">AI sẽ điều chỉnh độ khó phù hợp với định hướng này, tránh câu hỏi quá khó hoặc xa rời trọng tâm.</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-2">
-            <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">2. Tên đề thi (Tùy chọn)</label>
-            <input type="text" value={examTitle} onChange={e=>setExamTitle(e.target.value)}
-              placeholder="Ví dụ: Ôn tập các câu làm sai / Đề kiểm tra..."
-              className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">⏱️ Thời gian thi (Phút)</label>
-            <input type="number" min="1" max="180" value={durationMinutes} onChange={e=>setDurationMinutes(e.target.value)}
-              placeholder="45"
-              className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)] font-semibold" />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">3. Google Gemini API Key</label>
-          <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
-            placeholder="Dán AIzaSy... (Lấy miễn phí tại aistudio.google.com)"
-            className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
-        </div>
-
-        <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">4. Nội dung / Câu hỏi gốc để AI phát triển</label>
-          <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
-            placeholder="Dán nội dung, chuyên đề hoặc các câu hỏi cần ôn tập vào đây..."
-            className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
-        </div>
-
-        {error && <p className="text-sm text-[var(--danger)] font-semibold break-words">{error}</p>}
-
-        <button onClick={handleGenerate} disabled={loading}
-          className="w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-          {loading ? <><span className="spinner !w-4 !h-4 !border-2"></span> {progressLabel}</> : "✨ Tạo đề và Lưu vào Sảnh"}
-        </button>
-      </div>
-    </div>
+  return h("div", { className: "min-h-screen p-4 sm:p-8 max-w-3xl mx-auto" },
+    h("button", { onClick: onBack, className: "text-sm text-[#4B5675] mb-4" }, "← Quay lại Sảnh chính"),
+    h("div", { className: "bg-white rounded-2xl border border-[#E4E1D8] p-6 space-y-4" },
+      h("h2", { className: "font-display font-bold text-xl" }, "Tạo bộ đề 12 câu bằng AI"),
+      h("div", null,
+        h("label", { className: "text-sm font-semibold block mb-1" }, "1. Chuẩn độ khung định hướng"),
+        h("select", { value: standard, onChange: e=>setStandard(e.target.value), className: "w-full text-sm p-2.5 rounded-xl border border-[#E4E1D8]" },
+          h("option", { value: "Kỳ thi tốt nghiệp THPT Quốc gia" }, "Chuẩn THPT Quốc gia"),
+          h("option", { value: "Đánh giá năng lực ĐHQG TP.HCM" }, "Đánh giá năng lực ĐHQG TP.HCM"),
+          h("option", { value: "Đánh giá năng lực ĐHQG Hà Nội" }, "Đánh giá năng lực ĐHQG Hà Nội")
+        )
+      ),
+      h("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-4" },
+        h("div", { className: "sm:col-span-2" },
+          h("label", { className: "text-sm font-semibold block mb-1" }, "2. Tên đề thi"),
+          h("input", { type: "text", value: examTitle, onChange: e=>setExamTitle(e.target.value), className: "w-full text-sm p-2.5 rounded-xl border border-[#E4E1D8]" })
+        ),
+        h("div", null,
+          h("label", { className: "text-sm font-semibold block mb-1" }, "⏱️ Thời gian (Phút)"),
+          h("input", { type: "number", value: durationMinutes, onChange: e=>setDurationMinutes(e.target.value), className: "w-full text-sm p-2.5 rounded-xl border border-[#E4E1D8]" })
+        )
+      ),
+      h("div", null,
+        h("label", { className: "text-sm font-semibold block mb-1" }, "3. Gemini API Key"),
+        h("input", { type: "password", value: apiKey, onChange: e=>setApiKey(e.target.value), placeholder: "Dán AIzaSy...", className: "w-full text-sm p-2.5 rounded-xl border border-[#E4E1D8]" })
+      ),
+      h("div", null,
+        h("label", { className: "text-sm font-semibold block mb-1" }, "4. Nội dung / Câu hỏi gốc"),
+        h("textarea", { value: sourceText, onChange: e=>setSourceText(e.target.value), rows: 5, className: "w-full text-sm p-2.5 rounded-xl border border-[#E4E1D8]" })
+      ),
+      error && h("p", { className: "text-sm text-[var(--danger)] font-semibold" }, error),
+      h("button", { onClick: handleGenerate, disabled: loading, className: "w-full py-3.5 rounded-xl bg-[var(--accent)] font-semibold" },
+        loading ? progressLabel : "✨ Tạo đề và Lưu vào Sảnh"
+      )
+    )
   );
 }
 
 function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmit }){
-  return (
-    <div className="min-h-screen pb-12">
-      <header className="border-b border-[#E4E1D8] bg-white/80 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-[1400px] mx-auto px-4 py-3.5 flex items-center justify-between">
-          <div>
-            <h1 className="font-display font-bold text-[var(--ink)] text-base sm:text-lg">{examTitle}</h1>
-            <p className="text-xs text-[#9AA5B1]">Đang diễn ra phòng thi trực tuyến</p>
-          </div>
-          <div className="font-mono-num text-2xl font-bold text-[var(--ink)]">
-            {formatClock(secondsLeft)}
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 p-4 lg:p-8">
-        <main>
-          {groups.map(g => (
-            <div key={g.id} className="mb-6">
-              {g.questions.map(q => (
-                <div key={q.id} id={"q-"+q.id} className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-[#9AA5B1]">Câu {q.num}</span>
-                    {q.difficulty && <span className="text-[11px] font-medium text-[#4B5675] bg-[#FAF9F5] px-2 py-0.5 rounded border border-[#E4E1D8]">Mức độ {q.difficulty}/12</span>}
-                  </div>
-                  <MathText text={q.content} className="text-base text-[var(--ink)] font-medium block mb-4" />
-                  <div className="grid sm:grid-cols-2 gap-2.5">
-                    {q.options.map(opt => (
-                      <button key={opt.key} onClick={()=>onSelect(q.id, opt.key)}
-                        className={"option-btn flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border border-[#E4E1D8] w-full " + (answers[q.id]===opt.key ? "selected" : "bg-white")}>
-                        <span className="bubble">{opt.key}</span>
-                        <MathText text={opt.text} className="text-sm" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </main>
-
-        <aside className="lg:sticky lg:top-20 h-fit space-y-4">
-          <div className="bg-white rounded-2xl border border-[#E4E1D8] p-4">
-            <button onClick={onSubmit} className="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-semibold hover:bg-[#243357] transition-colors">
-              Nộp bài và xem cách giải
-            </button>
-          </div>
-        </aside>
-      </div>
-    </div>
+  return h("div", { className: "min-h-screen pb-12" },
+    h("header", { className: "border-b border-[#E4E1D8] bg-white sticky top-0 z-30 p-4" },
+      h("div", { className: "max-w-[1400px] mx-auto flex items-center justify-between" },
+        h("h1", { className: "font-display font-bold text-lg" }, examTitle),
+        h("div", { className: "font-mono-num text-2xl font-bold" }, formatClock(secondsLeft))
+      )
+    ),
+    h("div", { className: "max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 p-4" },
+      h("main", null,
+        groups.map(g => h("div", { key: g.id },
+          g.questions.map(q => h("div", { key: q.id },
+            h("div", { className: "bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4" },
+              h("div", { className: "text-xs font-bold text-[#9AA5B1] mb-2" }, "Câu " + q.num),
+              h(MathText, { text: q.content, className: "text-base font-medium block mb-4" }),
+              h("div", { className: "grid sm:grid-cols-2 gap-2.5" },
+                q.options.map(opt => h("button", {
+                  key: opt.key,
+                  onClick: () => onSelect(q.id, opt.key),
+                  className: "option-btn flex items-center gap-3 text-left p-3 rounded-xl border " + (answers[q.id]===opt.key ? "selected" : "bg-white")
+                },
+                  h("span", { className: "bubble" }, opt.key),
+                  h(MathText, { text: opt.text, className: "text-sm" })
+                ))
+              )
+            )
+          ))
+        ))
+      ),
+      h("aside", null,
+        h("button", { onClick: onSubmit, className: "w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-semibold" }, "Nộp bài và xem giải")
+      )
+    )
   );
 }
 
-function ResultScreen({ examTitle, groups, answers, result, onGoHome, onRetryMistakes }){
+function ResultScreen({ examTitle, groups, answers, result, onGoHome }){
   const allQuestions = groups.flatMap(g=>g.questions);
-  const wrongQuestions = allQuestions.filter(q => answers[q.id] !== q.correctKey);
-
-  return (
-    <div className="min-h-screen p-4 sm:p-8 max-w-4xl mx-auto">
-      <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 mb-6">
-        <div className="text-center mb-6">
-          <h1 className="font-display font-bold text-xl text-[var(--ink)] mb-1">{examTitle}</h1>
-          <p className="text-xs text-[#9AA5B1] mb-4">Kết quả thi & Hướng dẫn giải chi tiết</p>
-
-          <div className="font-display text-5xl font-extrabold text-[var(--ink)] mb-2">
-            {result.score.toFixed(2)} <span className="text-xl font-normal text-[#9AA5B1]">/ 10đ</span>
-          </div>
-
-          <div className="flex justify-center gap-6 text-sm mb-6">
-            <div><span className="font-semibold text-[var(--success)]">{result.correctCount}</span> câu đúng</div>
-            <div><span className="font-semibold text-[var(--danger)]">{result.total - result.correctCount}</span> câu sai</div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button onClick={onGoHome}
-              className="flex-1 py-3.5 rounded-xl bg-[var(--ink)] text-white font-bold hover:bg-[#243357] transition-colors">
-              🏠 Quay lại Sảnh chính
-            </button>
-            {wrongQuestions.length > 0 && (
-              <button onClick={() => onRetryMistakes(wrongQuestions)}
-                className="flex-1 py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold hover:bg-[var(--accent-deep)] hover:text-white transition-colors shadow-sm">
-                ✨ Tạo đề ôn tập các câu làm sai ({wrongQuestions.length} câu)
-              </button>
-            )}
-          </div>
-        </div>
-
-        <hr className="border-[#E4E1D8] my-6" />
-
-        <h3 className="font-display font-bold text-lg text-[var(--ink)] mb-4">Chi tiết từng câu & Cách giải</h3>
-        <div className="space-y-4">
-          {allQuestions.map(q => {
-            const userAns = answers[q.id];
-            const isCorrect = userAns === q.correctKey;
-            return (
-              <div key={q.id} className={"rounded-xl border p-4 " + (isCorrect ? "border-[#A7F3D0] bg-[#F0FDF4]" : "border-[#FECACA] bg-[#FEF2F2]")}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-[#4B5675]">Câu {q.num}</span>
-                  <span className={"text-xs font-bold px-2 py-0.5 rounded " + (isCorrect ? "bg-[var(--success-bg)] text-[var(--success)]" : "bg-[var(--danger-bg)] text-[var(--danger)]")}>
-                    {isCorrect ? "Đúng ✓" : "Sai ✗"}
-                  </span>
-                </div>
-                <MathText text={q.content} className="text-sm font-semibold text-[var(--ink)] block mb-3" />
-                
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                  {q.options.map(opt => {
-                    let badgeStyle = "bg-white border-[#E4E1D8] text-[var(--ink-soft)]";
-                    if (opt.key === q.correctKey) badgeStyle = "bg-[var(--success)] text-white font-bold border-[var(--success)]";
-                    else if (opt.key === userAns && !isCorrect) badgeStyle = "bg-[var(--danger)] text-white font-bold border-[var(--danger)]";
-
-                    return (
-                      <div key={opt.key} className={"text-xs p-2 rounded-lg border flex items-center gap-2 " + badgeStyle}>
-                        <span className="font-mono font-bold">{opt.key}.</span>
-                        <span className="truncate">{opt.text}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="bg-white/80 rounded-lg p-3 border border-[#E4E1D8]/60 text-xs">
-                  <span className="font-bold text-[var(--ink)] block mb-1">💡 Cách giải chi tiết:</span>
-                  <MathText text={q.explanation} className="text-[var(--ink-soft)] leading-relaxed" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+  return h("div", { className: "min-h-screen p-4 max-w-4xl mx-auto" },
+    h("div", { className: "bg-white rounded-2xl border border-[#E4E1D8] p-6 text-center" },
+      h("h1", { className: "font-bold text-xl mb-2" }, examTitle),
+      h("div", { className: "text-5xl font-extrabold mb-4" }, result.score.toFixed(2), h("span", { className: "text-xl font-normal" }, " / 10đ")),
+      h("button", { onClick: onGoHome, className: "px-6 py-3 rounded-xl bg-[var(--ink)] text-white font-bold" }, "🏠 Quay lại Sảnh chính")
+    )
   );
 }
 
 function App(){
   const [examList, setExamList] = useState(() => {
     const saved = localStorage.getItem("saved_exams");
-    if(saved) {
-      try { return JSON.parse(saved); } catch(e){}
-    }
-    return [{
-      id: "exam-base-1",
-      title: "Bộ đề Toán Cực Trị & Hàm Số Mẫu",
-      createdAt: new Date().toLocaleDateString("vi-VN"),
-      standard: "Kỳ thi tốt nghiệp THPT Quốc gia",
-      durationMinutes: 45,
-      groups: BASE_GROUPS
-    }];
+    return saved ? JSON.parse(saved) : [{ id: "exam-base-1", title: "Bộ đề Toán Cực Trị Mẫu", createdAt: "Mới", durationMinutes: 45, groups: BASE_GROUPS }];
   });
-
   const [currentExam, setCurrentExam] = useState(null);
   const [activeGroups, setActiveGroups] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -503,15 +360,8 @@ function App(){
   const [secondsLeft, setSecondsLeft] = useState(45 * 60);
   const [result, setResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
-  
-  const [genInitialSource, setGenInitialSource] = useState("");
-  const [genInitialTitle, setGenInitialTitle] = useState("");
-  const [genInitialStandard, setGenInitialStandard] = useState("Kỳ thi tốt nghiệp THPT Quốc gia");
-  const [genInitialDuration, setGenInitialDuration] = useState(45);
 
-  useEffect(() => {
-    localStorage.setItem("saved_exams", JSON.stringify(examList));
-  }, [examList]);
+  useEffect(() => { localStorage.setItem("saved_exams", JSON.stringify(examList)); }, [examList]);
 
   useEffect(() => {
     if(screen !== "exam") return;
@@ -524,85 +374,30 @@ function App(){
     setCurrentExam(exam);
     setActiveGroups(buildAttempt(exam.groups));
     setAnswers({});
-    setResult(null);
     setSecondsLeft((exam.durationMinutes || 45) * 60);
     setScreen("exam");
   }
 
   function handleGeneratedNewExam(title, questions, standard, durationMinutes){
-    const newExam = {
-      id: "exam-" + Date.now(),
-      title: title,
-      createdAt: new Date().toLocaleDateString("vi-VN"),
-      standard: standard,
-      durationMinutes: durationMinutes || 45,
-      groups: [{ id: "g-ai-" + Date.now(), name: "Nhóm câu hỏi AI", questions }]
-    };
-
-    setExamList(prevList => {
-      const updated = [newExam, ...prevList];
-      if (updated.length > MAX_SAVED_EXAMS) {
-        return updated.slice(0, MAX_SAVED_EXAMS);
-      }
-      return updated;
-    });
-
+    const newExam = { id: "exam-" + Date.now(), title, createdAt: "Vừa xong", standard, durationMinutes: durationMinutes || 45, groups: [{ id: "g-ai", name: "AI", questions }] };
+    setExamList(prev => [newExam, ...prev]);
     setScreen("home");
-  }
-
-  function handleRetryMistakes(wrongQuestions){
-    const sourceSummary = wrongQuestions.map((q, idx) => 'Câu ' + (idx+1) + ': ' + q.content).join("\n");
-    setGenInitialSource(sourceSummary);
-    setGenInitialTitle('Đề luyện lại các câu sai (' + wrongQuestions.length + ' câu)');
-    setGenInitialStandard(currentExam?.standard || "Kỳ thi tốt nghiệp THPT Quốc gia");
-    setGenInitialDuration(currentExam?.durationMinutes || 45);
-    setScreen("generator");
-  }
-
-  function handleSelectOption(qid, key){
-    setAnswers(prev => ({ ...prev, [qid]: key }));
   }
 
   function handleSubmit(){
     const allQuestions = activeGroups.flatMap(g=>g.questions);
     const correctCount = allQuestions.filter(q => answers[q.id] === q.correctKey).length;
-    const total = allQuestions.length;
-    const score = total ? (correctCount/total)*10 : 0;
-    
-    setResult({ score, correctCount, total });
+    setResult({ score: (correctCount/allQuestions.length)*10, correctCount, total: allQuestions.length });
     setScreen("result");
   }
 
-  return (
-    <div style={{ background:"var(--paper)" }}>
-      {screen === "home" && (
-        <HomeScreen examList={examList} onSelectExam={handleSelectExam} onOpenGenerator={()=>{
-          setGenInitialSource(""); setGenInitialTitle(""); setGenInitialDuration(45); setScreen("generator");
-        }} />
-      )}
-      {screen === "generator" && (
-        <GeneratorScreen 
-          onBack={()=>setScreen("home")} 
-          onGenerated={handleGeneratedNewExam} 
-          apiKey={apiKey} 
-          setApiKey={setApiKey} 
-          initialSourceText={genInitialSource}
-          initialTitle={genInitialTitle}
-          initialStandard={genInitialStandard}
-          initialDuration={genInitialDuration}
-        />
-      )}
-      {screen === "exam" && currentExam && (
-        <ExamScreen examTitle={currentExam.title} groups={activeGroups} answers={answers} onSelect={handleSelectOption} secondsLeft={secondsLeft} onSubmit={handleSubmit} />
-      )}
-      {screen === "result" && currentExam && (
-        <ResultScreen examTitle={currentExam.title} groups={activeGroups} answers={answers} result={result} onGoHome={()=>setScreen("home")} onRetryMistakes={handleRetryMistakes} />
-      )}
-    </div>
-  );
+  if (screen === "home") return h(HomeScreen, { examList, onSelectExam: handleSelectExam, onOpenGenerator: () => setScreen("generator") });
+  if (screen === "generator") return h(GeneratorScreen, { onBack: () => setScreen("home"), onGenerated: handleGeneratedNewExam, apiKey, setApiKey });
+  if (screen === "exam") return h(ExamScreen, { examTitle: currentExam.title, groups: activeGroups, answers, onSelect: (qid, k)=>setAnswers(p=>({...p, [qid]:k})), secondsLeft, onSubmit: handleSubmit });
+  if (screen === "result") return h(ResultScreen, { examTitle: currentExam.title, groups: activeGroups, answers, result, onGoHome: () => setScreen("home") });
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>
