@@ -55,23 +55,18 @@
 const { useState, useEffect, useMemo } = React;
 
 /* ---------------------------------------------------------
-   0. CẤU HÌNH & XỬ LÝ JSON (ĐÃ SỬA LỖI MODEL & ESCAPE)
+   0. CẤU HÌNH & XỬ LÝ JSON & GỌI GEMINI API
 --------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
 
 function cleanAndParseJSON(rawText) {
   let clean = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-  
-  // Loại bỏ các ký tự điều khiển không hợp lệ
-  clean = clean.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
-
-  // Tự động escape các dấu gạch chéo ngược (\) bị lỗi
+  clean = clean.replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
   clean = clean.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
 
   try {
     return JSON.parse(clean);
   } catch (err) {
-    // Trích xuất mảng JSON nếu AI trả về kèm văn bản phụ
     const start = clean.indexOf("[");
     const end = clean.lastIndexOf("]");
     if (start !== -1 && end !== -1 && end > start) {
@@ -82,15 +77,8 @@ function cleanAndParseJSON(rawText) {
   }
 }
 
-async function callGemini(promptText, userApiKey) {
-  const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error("Vui lòng nhập Gemini API Key của bạn!");
-  }
-  
-  // Đã đổi sang gemini-2.5-flash để tránh lỗi quá tải high demand
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
-  
+async function requestGemini(modelName, promptText, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey.trim()}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -102,12 +90,33 @@ async function callGemini(promptText, userApiKey) {
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `Lỗi kết nối Gemini API (${res.status})`);
+    const message = errData.error?.message || `Lỗi kết nối Gemini API (${res.status})`;
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
   }
 
   const data = await res.json();
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   return cleanAndParseJSON(rawText);
+}
+
+async function callGemini(promptText, userApiKey) {
+  const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error("Vui lòng nhập Gemini API Key của bạn!");
+  }
+
+  // Thử model ổn định chính: gemini-1.5-flash
+  try {
+    return await requestGemini("gemini-1.5-flash", promptText, apiKey);
+  } catch (err) {
+    // Nếu quá tải (high demand / status 429/503), tự động đổi sang model dự phòng
+    if (err.status === 429 || err.status === 503 || (err.message && err.message.includes("high demand"))) {
+      return await requestGemini("gemini-1.5-pro", promptText, apiKey);
+    }
+    throw err;
+  }
 }
 
 /* ---------------------------------------------------------
