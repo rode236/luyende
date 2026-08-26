@@ -43,22 +43,11 @@
   .option-btn:hover .bubble{ border-color:var(--accent); }
   .option-btn.selected .bubble{ background:var(--ink); border-color:var(--ink); color:#fff; }
   .option-btn.selected{ background:#F1EEE5; border-color:var(--ink) !important; }
-  .nav-cell{
-    width:38px; height:38px; border-radius:10px; font-family:'IBM Plex Mono',monospace; font-weight:600;
-    font-size:12.5px; display:flex; align-items:center; justify-content:center; border:1.5px solid var(--line);
-    color:var(--ink-soft); transition:all .15s ease; cursor:pointer; background:#fff;
-  }
-  .nav-cell.answered{ background:var(--ink); border-color:var(--ink); color:#fff; }
-  .nav-cell:hover{ border-color:var(--accent); }
   .modal-in{ animation:pop .22s cubic-bezier(.22,1,.36,1); }
   @keyframes pop{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
-  .fade-in{ animation:fadein .3s ease; }
-  @keyframes fadein{ from{ opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
   .katex{ font-size:1.02em; }
   .spinner{ border:3px solid #E4E1D8; border-top-color:var(--accent); border-radius:50%; width:28px; height:28px; animation:spin .7s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
-  .pulse-red{ animation:pulsered 1s ease-in-out infinite; }
-  @keyframes pulsered{ 0%,100%{ opacity:1;} 50%{ opacity:.55;} }
 </style>
 </head>
 <body>
@@ -68,20 +57,18 @@
 const { useState, useEffect, useMemo, useRef } = React;
 
 /* ---------------------------------------------------------
-   0. CẤU HÌNH GEMINI API KEY & XỬ LÝ LỖI UNICODE PARSE JSON
+   0. CẤU HÌNH & XỬ LÝ JSON
 --------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
 
 function cleanAndParseJSON(rawText) {
   let clean = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-  // Escape các dấu gạch chéo ngược (\) không hợp lệ trong JSON do công thức LaTeX sinh ra
   clean = clean.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
   return JSON.parse(clean);
 }
 
 async function callGemini(promptText, userApiKey) {
   const apiKey = userApiKey || localStorage.getItem("user_gemini_key");
-  
   if (!apiKey || !apiKey.trim()) {
     throw new Error("Vui lòng nhập Gemini API Key của bạn!");
   }
@@ -124,7 +111,7 @@ const BASE_GROUPS = [
 const EXAM_MINUTES = 45;
 
 /* ---------------------------------------------------------
-   2. TIỆN ÍCH HỖ TRỢ
+   2. TIỆN ÍCH HỖ TRỢ HIỂN THỊ TOÁN HỌC (KATEX)
 --------------------------------------------------------- */
 function shuffleArray(arr){
   const a = [...arr];
@@ -182,27 +169,33 @@ function formatClock(totalSeconds){
 }
 
 /* ---------------------------------------------------------
-   3. GEMINI AI: SINH ĐỀ HÀM
+   3. GEMINI AI: SINH ĐỀ KÈM CHUẨN ĐỘ KHÓ
 --------------------------------------------------------- */
 const DIFFICULTY_BANDS = [
-  { from:1, to:4, count:4, levelName:"Nhận biết - Thông hiểu", guidance:"Rất dễ, công thức trực tiếp, số liệu đẹp." },
-  { from:5, to:8, count:4, levelName:"Vận dụng thấp", guidance:"Độ khó trung bình, cần 2-3 bước biến đổi." },
-  { from:9, to:11, count:3, levelName:"Vận dụng cao", guidance:"Khó, có bẫy hoặc tính toán phức tạp." },
-  { from:12, to:12, count:1, levelName:"Phân hóa", guidance:"Câu hỏi chốt chặn, đòi hỏi tư duy sâu." }
+  { from:1, to:4, count:4, levelName:"Nhận biết - Thông hiểu", guidance:"Rất rõ ràng, kiểm tra trực tiếp kiến thức cốt lõi." },
+  { from:5, to:8, count:4, levelName:"Vận dụng thấp", guidance:"Độ khó trung bình, cần 2-3 bước tư duy logic." },
+  { from:9, to:11, count:3, levelName:"Vận dụng cao", guidance:"Phân hóa khá, đòi hỏi sự linh hoạt và tính toán cẩn thận." },
+  { from:12, to:12, count:1, levelName:"Phân hóa xuất sắc", guidance:"Câu hỏi chốt chặn năng lực sâu sắc." }
 ];
 
-async function generateQuestionBank(sourceText, apiKey, onProgress){
+async function generateQuestionBank(sourceText, standard, apiKey, onProgress){
   let all = [];
   for(const band of DIFFICULTY_BANDS){
     if(onProgress) onProgress(band);
-    const prompt = `Bạn là giáo viên ra đề thi. Câu hỏi gốc: "${sourceText}". Hãy tạo đúng ${band.count} câu hỏi trắc nghiệm mới cùng dạng hoặc mở rộng theo độ khó "${band.levelName}". Lưu ý: Nếu có ký tự đặc biệt hoặc công thức LaTeX, hãy viết cẩn thận. Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
+    const prompt = `Bạn là chuyên gia khảo thí uy tín. Định hướng / Chuẩn đề thi: "${standard}". 
+Dựa vào nguồn/kiến thức trọng tâm sau: "${sourceText}". 
+Hãy tạo đúng ${band.count} câu hỏi trắc nghiệm mới bám sát định hướng "${standard}" ở mức độ "${band.levelName}" (${band.guidance}). 
+Yêu cầu: Tránh tạo câu hỏi quá đánh đố, lắt léo phi thực tế hoặc mất trọng tâm; bám sát năng lực thực tế của thí sinh.
+Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử định dạng chuẩn: 
+[{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
+
     const parsed = await callGemini(prompt, apiKey);
     const qs = parsed.map((item, i) => ({
       id: "q-" + Date.now() + "-" + band.from + "-" + i,
       content: item.question,
       options: item.options,
       correctIndex: item.correctIndex,
-      explanation: item.explanation || "",
+      explanation: item.explanation || "Không có giải thích chi tiết.",
       difficulty: band.from + i
     }));
     all = all.concat(qs);
@@ -211,7 +204,7 @@ async function generateQuestionBank(sourceText, apiKey, onProgress){
 }
 
 /* ---------------------------------------------------------
-   4. MÀN HÌNH SẢNH CHÍNH (LƯU TRỮ ĐỀ & PHÒNG THI)
+   4. MÀN HÌNH SẢNH CHÍNH
 --------------------------------------------------------- */
 function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
   return (
@@ -220,7 +213,7 @@ function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-[var(--ink)]">Sảnh Thi Trực Tuyến</h1>
-            <p className="text-sm text-[#4B5675] mt-1">Chọn đề thi có sẵn hoặc tạo bộ đề mới bằng Gemini AI</p>
+            <p className="text-sm text-[#4B5675] mt-1">Kho lưu trữ đề thi chung cho mọi người cùng ôn tập và luyện thi</p>
           </div>
           <button onClick={onOpenGenerator}
             className="px-5 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-semibold hover:bg-[var(--accent-deep)] hover:text-white transition-colors shadow-sm flex items-center gap-2">
@@ -231,9 +224,9 @@ function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
         <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-bold text-lg text-[var(--ink)]">
-              Danh sách đề thi hiện có ({examList.length}/{MAX_SAVED_EXAMS})
+              Danh sách đề thi ({examList.length}/{MAX_SAVED_EXAMS})
             </h2>
-            <span className="text-xs text-[#9AA5B1]">Tự động xóa đề cũ nếu vượt quá 30 đề</span>
+            <span className="text-xs text-[#9AA5B1]">Hệ thống tự động dọn dẹp các đề cũ nhất khi vượt quá 30 đề</span>
           </div>
 
           <div className="grid gap-3">
@@ -245,9 +238,10 @@ function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
                       Đề #{examList.length - idx}
                     </span>
                     <span className="text-xs text-[#9AA5B1]">{item.createdAt}</span>
+                    {item.standard && <span className="text-xs text-[var(--accent-deep)] bg-[#FEF3C7] px-2 py-0.5 rounded font-medium">{item.standard}</span>}
                   </div>
                   <h3 className="font-semibold text-base text-[var(--ink)]">{item.title}</h3>
-                  <p className="text-xs text-[#4B5675] mt-0.5">{item.groups.reduce((acc, g) => acc + g.questions.length, 0)} câu hỏi · Trắc nghiệm</p>
+                  <p className="text-xs text-[#4B5675] mt-0.5">{item.groups.reduce((acc, g) => acc + g.questions.length, 0)} câu hỏi trắc nghiệm</p>
                 </div>
                 <button onClick={() => onSelectExam(item)}
                   className="w-full sm:w-auto px-4 py-2 rounded-lg bg-[var(--ink)] text-white text-sm font-semibold hover:bg-[#243357] transition-colors">
@@ -265,27 +259,28 @@ function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
 /* ---------------------------------------------------------
    5. MÀN HÌNH TẠO ĐỀ GEMINI AI
 --------------------------------------------------------- */
-function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
-  const [sourceText, setSourceText] = useState("");
-  const [examTitle, setExamTitle] = useState("");
+function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey, initialSourceText, initialTitle, initialStandard }){
+  const [sourceText, setSourceText] = useState(initialSourceText || "");
+  const [examTitle, setExamTitle] = useState(initialTitle || "");
+  const [standard, setStandard] = useState(initialStandard || "Kỳ thi tốt nghiệp THPT Quốc gia");
   const [loading, setLoading] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
 
   async function handleGenerate(){
     if(!apiKey || !apiKey.trim()){ setError("Vui lòng nhập Gemini API Key!"); return; }
-    if(!sourceText.trim()){ setError("Vui lòng dán câu hỏi gốc!"); return; }
+    if(!sourceText.trim()){ setError("Vui lòng nhập nội dung hoặc câu hỏi gốc!"); return; }
     setError("");
     setLoading(true);
     localStorage.setItem("user_gemini_key", apiKey.trim());
 
     try{
-      const questions = await generateQuestionBank(sourceText.trim(), apiKey.trim(), band => {
-        setProgressLabel(`Gemini đang tạo câu ${band.from}${band.from!==band.to ? "-"+band.to : ""}/12…`);
+      const questions = await generateQuestionBank(sourceText.trim(), standard, apiKey.trim(), band => {
+        setProgressLabel(`Gemini đang tạo câu ${band.from}${band.from!==band.to ? "-"+band.to : ""}/12...`);
       });
       
-      const title = examTitle.trim() || `Bộ đề AI - ${sourceText.trim().slice(0, 25)}...`;
-      onGenerated(title, questions);
+      const title = examTitle.trim() || `Đề ôn tập (${standard}) - ${sourceText.trim().slice(0, 20)}...`;
+      onGenerated(title, questions, standard);
     }catch(e){
       setError("Lỗi tạo câu hỏi: " + e.message);
     }
@@ -297,35 +292,41 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey }){
     <div className="min-h-screen p-4 sm:p-8 max-w-3xl mx-auto">
       <button onClick={onBack} className="text-sm text-[#4B5675] hover:text-[var(--ink)] mb-4">← Quay lại Sảnh chính</button>
       <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 space-y-4">
-        <h2 className="font-display font-bold text-xl text-[var(--ink)]">Tạo bộ đề 12 câu bằng AI</h2>
+        <h2 className="font-display font-bold text-xl text-[var(--ink)]">Tạo bộ đề 12 câu thông minh bằng AI</h2>
 
         <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">1. Tên đề thi (Tùy chọn)</label>
+          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">1. Chuẩn độ khung định hướng cho AI (Quan trọng)</label>
+          <select value={standard} onChange={e=>setStandard(e.target.value)}
+            className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] bg-white focus:outline-none focus:border-[var(--accent)] font-medium">
+            <option value="Kỳ thi tốt nghiệp THPT Quốc gia">Chuẩn THPT Quốc gia (Bám sát cấu trúc đề Bộ GD&ĐT)</option>
+            <option value="Đánh giá năng lực ĐHQG TP.HCM (VNU-HCM)">Đánh giá năng lực ĐHQG TP.HCM (Logic, Tư duy, Giải quyết vấn đề)</option>
+            <option value="Đánh giá năng lực ĐHQG Hà Nội (VNU-Hanoi)">Đánh giá năng lực ĐHQG Hà Nội (Tư duy định lượng & Khoa học)</option>
+            <option value="Đánh giá tư duy ĐH Bách Khoa Hà Nội (TSA)">Đánh giá tư duy Đại học Bách Khoa Hà Nội (TSA)</option>
+            <option value="Kiểm tra đánh giá chất lượng cơ bản">Ôn tập kiến thức cơ bản / Luyện tập hàng ngày</option>
+          </select>
+          <p className="text-xs text-[#9AA5B1] mt-1">AI sẽ điều chỉnh độ khó phù hợp với định hướng này, tránh câu hỏi quá khó hoặc xa rời trọng tâm.</p>
+        </div>
+
+        <div>
+          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">2. Tên đề thi (Tùy chọn)</label>
           <input type="text" value={examTitle} onChange={e=>setExamTitle(e.target.value)}
-            placeholder="Nhập tên đề thi (ví dụ: Đề Tư Duy Logic / Đề Hàm Số)..."
+            placeholder="Ví dụ: Ôn tập các câu làm sai / Đề kiểm tra chương hàm số..."
             className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">2. Google Gemini API Key</label>
+          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">3. Google Gemini API Key</label>
           <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
             placeholder="Dán AIzaSy... (Lấy miễn phí tại aistudio.google.com)"
             className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">3. Câu hỏi gốc để AI phát triển</label>
+          <label className="text-sm font-semibold text-[var(--ink)] mb-1 block">4. Nội dung / Câu hỏi gốc để AI phát triển</label>
           <textarea value={sourceText} onChange={e=>setSourceText(e.target.value)} rows={5}
-            placeholder="Dán câu hỏi mẫu vào đây..."
+            placeholder="Dán nội dung, chuyên đề hoặc các câu hỏi cần ôn tập vào đây..."
             className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-[#E4E1D8] focus:outline-none focus:border-[var(--accent)]" />
         </div>
-
-        {sourceText.trim() && (
-          <div className="bg-[#FAF9F5] rounded-xl p-3.5">
-            <p className="text-[11px] font-semibold text-[#9AA5B1] uppercase tracking-wide mb-1">Xem trước câu gốc</p>
-            <MathText text={sourceText} className="text-sm text-[var(--ink)] leading-relaxed block" />
-          </div>
-        )}
 
         {error && <p className="text-sm text-[var(--danger)] font-semibold break-words">{error}</p>}
 
@@ -348,7 +349,7 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
         <div className="max-w-[1400px] mx-auto px-4 py-3.5 flex items-center justify-between">
           <div>
             <h1 className="font-display font-bold text-[var(--ink)] text-base sm:text-lg">{examTitle}</h1>
-            <p className="text-xs text-[#9AA5B1]">Đang thi trực tuyến</p>
+            <p className="text-xs text-[#9AA5B1]">Đang diễn ra phòng thi trực tuyến</p>
           </div>
           <div className="font-mono-num text-2xl font-bold text-[var(--ink)]">
             {formatClock(secondsLeft)}
@@ -361,8 +362,11 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
           {groups.map(g => (
             <div key={g.id} className="mb-6">
               {g.questions.map(q => (
-                <div key={q.id} id={"q-"+q.id} className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4 scroll-mt-24">
-                  <div className="text-xs font-bold mb-2 text-[#9AA5B1]">Câu {q.num}</div>
+                <div key={q.id} id={"q-"+q.id} className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-[#9AA5B1]">Câu {q.num}</span>
+                    <span className="text-[11px] font-medium text-[#4B5675] bg-[#FAF9F5] px-2 py-0.5 rounded border border-[#E4E1D8]">Mức độ {q.difficulty}/12</span>
+                  </div>
                   <MathText text={q.content} className="text-base text-[var(--ink)] font-medium block mb-4" />
                   <div className="grid sm:grid-cols-2 gap-2.5">
                     {q.options.map(opt => (
@@ -380,9 +384,11 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
         </main>
 
         <aside className="lg:sticky lg:top-20 h-fit space-y-4">
-          <button onClick={onSubmit} className="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-semibold hover:bg-[#243357]">
-            Nộp bài
-          </button>
+          <div className="bg-white rounded-2xl border border-[#E4E1D8] p-4">
+            <button onClick={onSubmit} className="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-semibold hover:bg-[#243357] transition-colors">
+              Nộp bài và xem cách giải
+            </button>
+          </div>
         </aside>
       </div>
     </div>
@@ -390,35 +396,89 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
 }
 
 /* ---------------------------------------------------------
-   7. MÀN HÌNH KẾT QUẢ THI
+   7. MÀN HÌNH KẾT QUẢ VÀ XEM CÁCH GIẢI CHI TIẾT
 --------------------------------------------------------- */
-function ResultScreen({ examTitle, groups, answers, result, onGoHome }){
+function ResultScreen({ examTitle, groups, answers, result, onGoHome, onRetryMistakes }){
+  const allQuestions = groups.flatMap(g=>g.questions);
+  const wrongQuestions = allQuestions.filter(q => answers[q.id] !== q.correctKey);
+
   return (
-    <div className="min-h-screen p-4 sm:p-8 max-w-3xl mx-auto">
-      <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 text-center mb-6">
-        <h1 className="font-display font-bold text-xl text-[var(--ink)] mb-1">{examTitle}</h1>
-        <p className="text-xs text-[#9AA5B1] mb-4">Kết quả thi của bạn</p>
+    <div className="min-h-screen p-4 sm:p-8 max-w-4xl mx-auto">
+      <div className="bg-white rounded-2xl border border-[#E4E1D8] p-6 mb-6">
+        <div className="text-center mb-6">
+          <h1 className="font-display font-bold text-xl text-[var(--ink)] mb-1">{examTitle}</h1>
+          <p className="text-xs text-[#9AA5B1] mb-4">Kết quả thi & Hướng dẫn giải chi tiết</p>
 
-        <div className="font-display text-5xl font-extrabold text-[var(--ink)] mb-4">
-          {result.score.toFixed(2)}
+          <div className="font-display text-5xl font-extrabold text-[var(--ink)] mb-2">
+            {result.score.toFixed(2)} <span className="text-xl font-normal text-[#9AA5B1]">/ 10đ</span>
+          </div>
+
+          <div className="flex justify-center gap-6 text-sm mb-6">
+            <div><span className="font-semibold text-[var(--success)]">{result.correctCount}</span> câu đúng</div>
+            <div><span className="font-semibold text-[var(--danger)]">{result.total - result.correctCount}</span> câu sai</div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={onGoHome}
+              className="flex-1 py-3.5 rounded-xl bg-[var(--ink)] text-white font-bold hover:bg-[#243357] transition-colors">
+              🏠 Quay lại Sảnh chính
+            </button>
+            {wrongQuestions.length > 0 && (
+              <button onClick={() => onRetryMistakes(wrongQuestions)}
+                className="flex-1 py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold hover:bg-[var(--accent-deep)] hover:text-white transition-colors shadow-sm">
+                ✨ Tạo đề ôn tập các câu làm sai ({wrongQuestions.length} câu)
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex justify-center gap-6 text-sm mb-6">
-          <div><span className="font-semibold text-[var(--success)]">{result.correctCount}</span> câu đúng</div>
-          <div><span className="font-semibold text-[var(--danger)]">{result.total - result.correctCount}</span> câu sai</div>
-        </div>
+        <hr className="border-[#E4E1D8] my-6" />
 
-        <button onClick={onGoHome}
-          className="w-full py-3.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold hover:bg-[var(--accent-deep)] hover:text-white transition-colors">
-          🏠 Quay lại Sảnh chính
-        </button>
+        <h3 className="font-display font-bold text-lg text-[var(--ink)] mb-4">Chi tiết từng câu & Cách giải</h3>
+        <div className="space-y-4">
+          {allQuestions.map(q => {
+            const userAns = answers[q.id];
+            const isCorrect = userAns === q.correctKey;
+            return (
+              <div key={q.id} className={"rounded-xl border p-4 " + (isCorrect ? "border-[#A7F3D0] bg-[#F0FDF4]" : "border-[#FECACA] bg-[#FEF2F2]")}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-[#4B5675]">Câu {q.num}</span>
+                  <span className={"text-xs font-bold px-2 py-0.5 rounded " + (isCorrect ? "bg-[var(--success-bg)] text-[var(--success)]" : "bg-[var(--danger-bg)] text-[var(--danger)]")}>
+                    {isCorrect ? "Đúng ✓" : "Sai ✗"}
+                  </span>
+                </div>
+                <MathText text={q.content} className="text-sm font-semibold text-[var(--ink)] block mb-3" />
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                  {q.options.map(opt => {
+                    let badgeStyle = "bg-white border-[#E4E1D8] text-[var(--ink-soft)]";
+                    if (opt.key === q.correctKey) badgeStyle = "bg-[var(--success)] text-white font-bold border-[var(--success)]";
+                    else if (opt.key === userAns && !isCorrect) badgeStyle = "bg-[var(--danger)] text-white font-bold border-[var(--danger)]";
+
+                    return (
+                      <div key={opt.key} className={"text-xs p-2 rounded-lg border flex items-center gap-2 " + badgeStyle}>
+                        <span className="font-mono font-bold">{opt.key}.</span>
+                        <span className="truncate">{opt.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-white/80 rounded-lg p-3 border border-[#E4E1D8]/60 text-xs">
+                  <span className="font-bold text-[var(--ink)] block mb-1">💡 Cách giải chi tiết:</span>
+                  <MathText text={q.explanation} className="text-[var(--ink-soft)] leading-relaxed" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
 /* ---------------------------------------------------------
-   8. PHẦN CỐT LÕI ỨNG DỤNG (APP)
+   8. COMPONENT TỔNG (APP)
 --------------------------------------------------------- */
 function App(){
   const [examList, setExamList] = useState(() => {
@@ -430,6 +490,7 @@ function App(){
       id: "exam-base-1",
       title: "Bộ đề Toán Cực Trị & Hàm Số Mẫu",
       createdAt: new Date().toLocaleDateString("vi-VN"),
+      standard: "Kỳ thi tốt nghiệp THPT Quốc gia",
       groups: BASE_GROUPS
     }];
   });
@@ -437,10 +498,15 @@ function App(){
   const [currentExam, setCurrentExam] = useState(null);
   const [activeGroups, setActiveGroups] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [screen, setScreen] = useState("home");
+  const [screen, setScreen] = useState("home"); // home, generator, exam, result
   const [secondsLeft, setSecondsLeft] = useState(EXAM_MINUTES*60);
   const [result, setResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
+  
+  // State truyền sang form generator (dùng khi bấm tạo đề từ câu sai)
+  const [genInitialSource, setGenInitialSource] = useState("");
+  const [genInitialTitle, setGenInitialTitle] = useState("");
+  const [genInitialStandard, setGenInitialStandard] = useState("Kỳ thi tốt nghiệp THPT Quốc gia");
 
   useEffect(() => {
     localStorage.setItem("saved_exams", JSON.stringify(examList));
@@ -462,11 +528,12 @@ function App(){
     setScreen("exam");
   }
 
-  function handleGeneratedNewExam(title, questions){
+  function handleGeneratedNewExam(title, questions, standard){
     const newExam = {
       id: "exam-" + Date.now(),
       title: title,
       createdAt: new Date().toLocaleDateString("vi-VN"),
+      standard: standard,
       groups: [{ id: "g-ai-" + Date.now(), name: "Nhóm câu hỏi AI", questions }]
     };
 
@@ -479,6 +546,14 @@ function App(){
     });
 
     setScreen("home");
+  }
+
+  function handleRetryMistakes(wrongQuestions){
+    const sourceSummary = wrongQuestions.map((q, idx) => `Câu ${idx+1}: ${q.content}`).join("\n");
+    setGenInitialSource(sourceSummary);
+    setGenInitialTitle(`Đề luyện lại các câu sai (${wrongQuestions.length} câu)`);
+    setGenInitialStandard(currentExam?.standard || "Kỳ thi tốt nghiệp THPT Quốc gia");
+    setScreen("generator");
   }
 
   function handleSelectOption(qid, key){
@@ -498,16 +573,26 @@ function App(){
   return (
     <div style={{ background:"var(--paper)" }}>
       {screen === "home" && (
-        <HomeScreen examList={examList} onSelectExam={handleSelectExam} onOpenGenerator={()=>setScreen("generator")} />
+        <HomeScreen examList={examList} onSelectExam={handleSelectExam} onOpenGenerator={()=>{
+          setGenInitialSource(""); setGenInitialTitle(""); setScreen("generator");
+        }} />
       )}
       {screen === "generator" && (
-        <GeneratorScreen onBack={()=>setScreen("home")} onGenerated={handleGeneratedNewExam} apiKey={apiKey} setApiKey={setApiKey} />
+        <GeneratorScreen 
+          onBack={()=>setScreen("home")} 
+          onGenerated={handleGeneratedNewExam} 
+          apiKey={apiKey} 
+          setApiKey={setApiKey} 
+          initialSourceText={genInitialSource}
+          initialTitle={genInitialTitle}
+          initialStandard={genInitialStandard}
+        />
       )}
       {screen === "exam" && currentExam && (
         <ExamScreen examTitle={currentExam.title} groups={activeGroups} answers={answers} onSelect={handleSelectOption} secondsLeft={secondsLeft} onSubmit={handleSubmit} />
       )}
       {screen === "result" && currentExam && (
-        <ResultScreen examTitle={currentExam.title} groups={activeGroups} answers={answers} result={result} onGoHome={()=>setScreen("home")} />
+        <ResultScreen examTitle={currentExam.title} groups={activeGroups} answers={answers} result={result} onGoHome={()=>setScreen("home")} onRetryMistakes={handleRetryMistakes} />
       )}
     </div>
   );
