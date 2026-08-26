@@ -51,12 +51,9 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel">
 const { useState, useEffect, useMemo } = React;
 
-/* ---------------------------------------------------------
-   0. CẤU HÌNH & XỬ LÝ JSON & GỌI GEMINI API
---------------------------------------------------------- */
 const MAX_SAVED_EXAMS = 30;
 
 function cleanAndParseJSON(rawText) {
@@ -78,7 +75,7 @@ function cleanAndParseJSON(rawText) {
 }
 
 async function requestGemini(modelName, promptText, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey.trim()}`;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey.trim();
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -90,7 +87,7 @@ async function requestGemini(modelName, promptText, apiKey) {
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    const message = errData.error?.message || `Lỗi kết nối Gemini API (${res.status})`;
+    const message = errData.error?.message || ('Lỗi kết nối Gemini API (' + res.status + ')');
     const error = new Error(message);
     error.status = res.status;
     throw error;
@@ -107,11 +104,9 @@ async function callGemini(promptText, userApiKey) {
     throw new Error("Vui lòng nhập Gemini API Key của bạn!");
   }
 
-  // Thử model ổn định chính: gemini-1.5-flash
   try {
     return await requestGemini("gemini-1.5-flash", promptText, apiKey);
   } catch (err) {
-    // Nếu quá tải (high demand / status 429/503), tự động đổi sang model dự phòng
     if (err.status === 429 || err.status === 503 || (err.message && err.message.includes("high demand"))) {
       return await requestGemini("gemini-1.5-pro", promptText, apiKey);
     }
@@ -119,9 +114,6 @@ async function callGemini(promptText, userApiKey) {
   }
 }
 
-/* ---------------------------------------------------------
-   1. DỮ LIỆU MẪU BAN ĐẦU
---------------------------------------------------------- */
 const BASE_GROUPS = [
   {
     id: "g1",
@@ -134,9 +126,6 @@ const BASE_GROUPS = [
   }
 ];
 
-/* ---------------------------------------------------------
-   2. TIỆN ÍCH HỖ TRỢ HIỂN THỊ TOÁN HỌC (KATEX)
---------------------------------------------------------- */
 function shuffleArray(arr){
   const a = [...arr];
   for(let i=a.length-1;i>0;i--){
@@ -157,8 +146,7 @@ function buildAttempt(groups, opts){
       n++;
       const shuffledOpts = shuffleArray(q.options.map((text,idx)=>({text, isCorrect: idx===q.correctIndex})));
       const options = shuffledOpts.map((o,i)=>({ key: LETTERS[i], text:o.text, isCorrect:o.isCorrect }));
-      const correctKey = options.find(o=>o.isCorrect).key;
-      return { id:q.id, num:n, content:q.content, explanation:q.explanation, options, correctKey, difficulty:q.difficulty };
+      return { id:q.id, num:n, content:q.content, explanation:q.explanation, options, correctKey: options.find(o=>o.isCorrect).key, difficulty:q.difficulty };
     })
   }));
 }
@@ -192,9 +180,6 @@ function formatClock(totalSeconds){
   return String(m).padStart(2,"0") + ":" + String(sec).padStart(2,"0");
 }
 
-/* ---------------------------------------------------------
-   3. GEMINI AI: SINH ĐỀ KÈM CHUẨN ĐỘ KHÓ
---------------------------------------------------------- */
 const DIFFICULTY_BANDS = [
   { from:1, to:4, count:4, levelName:"Nhận biết - Thông hiểu", guidance:"Rất rõ ràng, kiểm tra trực tiếp kiến thức cốt lõi." },
   { from:5, to:8, count:4, levelName:"Vận dụng thấp", guidance:"Độ khó trung bình, cần 2-3 bước tư duy logic." },
@@ -206,12 +191,7 @@ async function generateQuestionBank(sourceText, standard, apiKey, onProgress){
   let all = [];
   for(const band of DIFFICULTY_BANDS){
     if(onProgress) onProgress(band);
-    const prompt = `Bạn là chuyên gia khảo thí uy tín. Định hướng / Chuẩn đề thi: "${standard}". 
-Dựa vào nguồn/kiến thức trọng tâm sau: "${sourceText}". 
-Hãy tạo đúng ${band.count} câu hỏi trắc nghiệm mới bám sát định hướng "${standard}" ở mức độ "${band.levelName}" (${band.guidance}). 
-Yêu cầu: Tránh tạo câu hỏi quá đánh đố, lắt léo phi thực tế hoặc mất trọng tâm; bám sát năng lực thực tế của thí sinh. Tuyệt đối không dùng ký tự xuống dòng trực tiếp trong chuỗi JSON.
-Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử định dạng chuẩn: 
-[{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]`;
+    const prompt = 'Bạn là chuyên gia khảo thí uy tín. Định hướng / Chuẩn đề thi: "' + standard + '". Dựa vào nguồn/kiến thức trọng tâm sau: "' + sourceText + '". Hãy tạo đúng ' + band.count + ' câu hỏi trắc nghiệm mới bám sát định hướng ở mức độ "' + band.levelName + '" (' + band.guidance + '). Tránh câu hỏi đánh đố phi thực tế. Trả về MẢNG JSON duy nhất gồm ' + band.count + ' phần tử dạng: [{"question":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]';
 
     const parsed = await callGemini(prompt, apiKey);
     const qs = parsed.map((item, i) => ({
@@ -227,9 +207,6 @@ Trả về MẢNG JSON duy nhất gồm ${band.count} phần tử định dạng
   return all;
 }
 
-/* ---------------------------------------------------------
-   4. MÀN HÌNH SẢNH CHÍNH
---------------------------------------------------------- */
 function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
   return (
     <div className="min-h-screen p-4 sm:p-8">
@@ -281,9 +258,6 @@ function HomeScreen({ examList, onSelectExam, onOpenGenerator }){
   );
 }
 
-/* ---------------------------------------------------------
-   5. MÀN HÌNH TẠO ĐỀ GEMINI AI
---------------------------------------------------------- */
 function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey, initialSourceText, initialTitle, initialStandard, initialDuration }){
   const [sourceText, setSourceText] = useState(initialSourceText || "");
   const [examTitle, setExamTitle] = useState(initialTitle || "");
@@ -303,10 +277,10 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey, initialSource
 
     try{
       const questions = await generateQuestionBank(sourceText.trim(), standard, apiKey.trim(), band => {
-        setProgressLabel(`Gemini đang tạo câu ${band.from}${band.from!==band.to ? "-"+band.to : ""}/12...`);
+        setProgressLabel("Gemini đang tạo câu " + band.from + (band.from!==band.to ? "-" + band.to : "") + "/12...");
       });
       
-      const title = examTitle.trim() || `Đề ôn tập (${standard}) - ${sourceText.trim().slice(0, 20)}...`;
+      const title = examTitle.trim() || ("Đề ôn tập (" + standard + ") - " + sourceText.trim().slice(0, 20) + "...");
       onGenerated(title, questions, standard, Number(durationMinutes));
     }catch(e){
       setError("Lỗi tạo câu hỏi: " + e.message);
@@ -374,9 +348,6 @@ function GeneratorScreen({ onBack, onGenerated, apiKey, setApiKey, initialSource
   );
 }
 
-/* ---------------------------------------------------------
-   6. MÀN HÌNH LÀM BÀI THI
---------------------------------------------------------- */
 function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmit }){
   return (
     <div className="min-h-screen pb-12">
@@ -430,9 +401,6 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
   );
 }
 
-/* ---------------------------------------------------------
-   7. MÀN HÌNH KẾT QUẢ VÀ XEM CÁCH GIẢI CHI TIẾT
---------------------------------------------------------- */
 function ResultScreen({ examTitle, groups, answers, result, onGoHome, onRetryMistakes }){
   const allQuestions = groups.flatMap(g=>g.questions);
   const wrongQuestions = allQuestions.filter(q => answers[q.id] !== q.correctKey);
@@ -512,9 +480,6 @@ function ResultScreen({ examTitle, groups, answers, result, onGoHome, onRetryMis
   );
 }
 
-/* ---------------------------------------------------------
-   8. COMPONENT TỔNG (APP)
---------------------------------------------------------- */
 function App(){
   const [examList, setExamList] = useState(() => {
     const saved = localStorage.getItem("saved_exams");
@@ -534,7 +499,7 @@ function App(){
   const [currentExam, setCurrentExam] = useState(null);
   const [activeGroups, setActiveGroups] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [screen, setScreen] = useState("home"); // home, generator, exam, result
+  const [screen, setScreen] = useState("home");
   const [secondsLeft, setSecondsLeft] = useState(45 * 60);
   const [result, setResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
@@ -586,9 +551,9 @@ function App(){
   }
 
   function handleRetryMistakes(wrongQuestions){
-    const sourceSummary = wrongQuestions.map((q, idx) => `Câu ${idx+1}: ${q.content}`).join("\n");
+    const sourceSummary = wrongQuestions.map((q, idx) => 'Câu ' + (idx+1) + ': ' + q.content).join("\n");
     setGenInitialSource(sourceSummary);
-    setGenInitialTitle(`Đề luyện lại các câu sai (${wrongQuestions.length} câu)`);
+    setGenInitialTitle('Đề luyện lại các câu sai (' + wrongQuestions.length + ' câu)');
     setGenInitialStandard(currentExam?.standard || "Kỳ thi tốt nghiệp THPT Quốc gia");
     setGenInitialDuration(currentExam?.durationMinutes || 45);
     setScreen("generator");
