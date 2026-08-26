@@ -43,8 +43,6 @@
   .option-btn:hover .bubble{ border-color:var(--accent); }
   .option-btn.selected .bubble{ background:var(--ink); border-color:var(--ink); color:#fff; }
   .option-btn.selected{ background:#F1EEE5; border-color:var(--ink) !important; }
-  .modal-in{ animation:pop .22s cubic-bezier(.22,1,.36,1); }
-  @keyframes pop{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
   .katex{ font-size:1.02em; }
   .spinner{ border:3px solid #E4E1D8; border-top-color:var(--accent); border-radius:50%; width:28px; height:28px; animation:spin .7s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -54,7 +52,7 @@
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo, useRef } = React;
+const { useState, useEffect, useMemo } = React;
 
 /* ---------------------------------------------------------
    0. CẤU HÌNH & XỬ LÝ JSON
@@ -365,7 +363,7 @@ function ExamScreen({ examTitle, groups, answers, onSelect, secondsLeft, onSubmi
                 <div key={q.id} id={"q-"+q.id} className="bg-white rounded-2xl border border-[#E4E1D8] p-5 mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-[#9AA5B1]">Câu {q.num}</span>
-                    <span className="text-[11px] font-medium text-[#4B5675] bg-[#FAF9F5] px-2 py-0.5 rounded border border-[#E4E1D8]">Mức độ {q.difficulty}/12</span>
+                    {q.difficulty && <span className="text-[11px] font-medium text-[#4B5675] bg-[#FAF9F5] px-2 py-0.5 rounded border border-[#E4E1D8]">Mức độ {q.difficulty}/12</span>}
                   </div>
                   <MathText text={q.content} className="text-base text-[var(--ink)] font-medium block mb-4" />
                   <div className="grid sm:grid-cols-2 gap-2.5">
@@ -503,7 +501,6 @@ function App(){
   const [result, setResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("user_gemini_key") || "");
   
-  // State truyền sang form generator (dùng khi bấm tạo đề từ câu sai)
   const [genInitialSource, setGenInitialSource] = useState("");
   const [genInitialTitle, setGenInitialTitle] = useState("");
   const [genInitialStandard, setGenInitialStandard] = useState("Kỳ thi tốt nghiệp THPT Quốc gia");
