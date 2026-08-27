@@ -23,8 +23,8 @@
 
             <form id="aiForm" class="space-y-4" onsubmit="return false;">
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">1. Tên bài thi / Chủ đề</label>
-                    <input type="text" id="examTitle" value="Đề Luyện Thi AI — 2026" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">1. Tên bài thi tổng hợp</label>
+                    <input type="text" id="examTitle" value="Đề Luyện Thi Đa Dạng AI — 2026" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -62,13 +62,28 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">7. Nội dung kiến thức / Tài liệu thô</label>
-                    <textarea id="examContent" rows="3" placeholder="Dán văn bản, bài học hoặc ghi chú dạng bài vào đây..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                <!-- PHẦN DANH SÁCH CÁC CHỦ ĐỀ / DẠNG BÀI (CÓ NÚT + THÊM CHỦ ĐỀ) -->
+                <div class="pt-2 border-t border-slate-100">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="block text-xs font-bold uppercase text-slate-600">7. Nội dung & Các Chủ Đề Lọc Đề Trộn</label>
+                        <button type="button" onclick="addTopicField()" class="flex items-center gap-1 text-xs px-3 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold rounded-lg transition-all border border-amber-200">
+                            <span>+</span> Thêm Chủ Đề / Dạng Bài
+                        </button>
+                    </div>
+                    
+                    <div id="topicsContainer" class="space-y-3">
+                        <!-- Khung chủ đề mặc định 1 -->
+                        <div class="topic-item p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 relative">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-500 uppercase">Chủ đề / Dạng bài #1</span>
+                            </div>
+                            <textarea rows="2" placeholder="Nhập kiến thức, ghi chú hoặc nội dung bài học cho chủ đề này..." class="topic-content w-full p-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                        </div>
+                    </div>
                 </div>
 
                 <button type="button" onclick="generateExam()" id="btnSubmit" class="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-all">
-                    ✨ Tạo Đề Chuẩn Cấu Trúc Ngay
+                    ✨ Tạo Đề Trộn Chuẩn Cấu Trúc Ngay
                 </button>
             </form>
         </div>
@@ -125,8 +140,25 @@
         let currentTimer = null;
         let activeExam = null;
         let wrongQuestions = [];
+        let topicCounter = 1;
 
-        // Trợ giúp Render Toán Học với KaTeX
+        // Hàm thêm khung nhập chủ đề mới khi bấm nút +
+        function addTopicField() {
+            topicCounter++;
+            const container = document.getElementById('topicsContainer');
+            const newField = document.createElement('div');
+            newField.className = 'topic-item p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 relative';
+            newField.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Chủ đề / Dạng bài #${topicCounter}</span>
+                    <button type="button" onclick="this.parentElement.parentElement.remove()" class="text-xs text-red-500 hover:text-red-700 font-bold">✕ Xóa</button>
+                </div>
+                <textarea rows="2" placeholder="Nhập kiến thức, ghi chú hoặc nội dung bài học cho chủ đề này..." class="topic-content w-full p-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+            `;
+            container.appendChild(newField);
+        }
+
+        // Render Toán Học KaTeX
         function renderMath() {
             setTimeout(() => {
                 if (window.renderMathInElement) {
@@ -191,8 +223,19 @@
             const level = document.getElementById('examLevel').value;
             const qCount = parseInt(document.getElementById('questionCount').value) || 10;
             const duration = parseInt(document.getElementById('examDuration').value) || 15;
-            const rawContent = document.getElementById('examContent').value.trim();
             
+            // Lấy tất cả nội dung chủ đề được nhập
+            const topicElements = document.querySelectorAll('.topic-content');
+            let topicsList = [];
+            topicElements.forEach((el, i) => {
+                const val = el.value.trim();
+                if (val) topicsList.push(`- Chủ đề ${i+1}: ${val}`);
+            });
+
+            const rawContent = topicsList.length > 0 
+                ? topicsList.join('\n') 
+                : "Tự động kết hợp kiến thức tổng hợp đa dạng các dạng toán/tư duy.";
+
             const errorAlert = document.getElementById('errorAlert');
             const btnSubmit = document.getElementById('btnSubmit');
 
@@ -205,17 +248,18 @@
             }
 
             btnSubmit.disabled = true;
-            btnSubmit.innerText = "⏳ AI đang biên soạn đề thi...";
+            btnSubmit.innerText = "⏳ AI đang lọc & trộn đề đa dạng...";
 
-            const prompt = `Bạn là chuyên gia ra đề thi cấp quốc gia. Hãy biên soạn một bộ đề thi trắc nghiệm gồm ${qCount} câu hỏi chuẩn hóa:
+            const prompt = `Bạn là chuyên gia ra đề thi cấp quốc gia. Hãy biên soạn một bộ đề thi trắc nghiệm gồm đúng ${qCount} câu hỏi chuẩn hóa:
 - Tên đề: ${title}
 - Định hướng kỳ thi: ${type}
 - Tiêu chuẩn phân hóa: Sắp xếp danh sách câu hỏi theo thứ tự ĐỘ KHÓ TĂNG DẦN (từ Nhận biết -> Thông hiểu -> Vận dụng -> Vận dụng cao).
-- Tài liệu / Phạm vi kiến thức: ${rawContent || "Kiến thức toán học và tư duy tổng hợp"}
+- Danh sách các chủ đề/tài liệu được cung cấp:
+${rawContent}
 
-LƯU Ý QUAN TRỌNG VỀ TOÁN HỌC:
-Tất cả các công thức, biến số, biểu thức toán học trong câu hỏi, đáp án và giải thích BẮT BUỘC phải bọc trong ký hiệu LaTeX chuẩn dạng \\( ... \\) cho inline hoặc $$ ... $$ cho display. 
-Ví dụ: \\(f(x) = x^3 - 3x + 1\\), \\(m = 3\\).
+YÊU CẦU LỌC & TRỘN ĐỀ:
+1. Hãy phân bổ đều số câu hỏi qua tất cả các Chủ đề/Dạng bài được cung cấp ở trên để tạo sự bất ngờ và phong phú.
+2. Tất cả công thức, biến số toán học BẮT BUỘC phải bọc trong ký hiệu LaTeX chuẩn: \\( ... \\) cho inline hoặc $$ ... $$ cho display.
 
 Yêu cầu xuất dữ liệu: Trả về DUY NHẤT 1 chuỗi JSON hợp lệ (không kèm markdown, không thêm bất kỳ văn bản giải thích nào) theo cấu trúc:
 {
@@ -269,14 +313,14 @@ Yêu cầu xuất dữ liệu: Trả về DUY NHẤT 1 chuỗi JSON hợp lệ (
                 localStorage.setItem('exams', JSON.stringify(storedExams));
 
                 renderExams();
-                alert(`Đã tạo thành công bộ đề với ${newExam.questions.length} câu hỏi!`);
+                alert(`Đã tạo thành công bộ đề đa dạng với ${newExam.questions.length} câu hỏi!`);
 
             } catch (err) {
                 errorAlert.innerText = `Không thể tạo đề: ${err.message}`;
                 errorAlert.classList.remove('hidden');
             } finally {
                 btnSubmit.disabled = false;
-                btnSubmit.innerText = "✨ Tạo Đề Chuẩn Cấu Trúc Ngay";
+                btnSubmit.innerText = "✨ Tạo Đề Trộn Chuẩn Cấu Trúc Ngay";
             }
         }
 
