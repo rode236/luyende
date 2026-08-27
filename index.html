@@ -1,504 +1,345 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LuyệnThi.AI — Phòng Thi Thông Minh ĐGNL, ĐGTD & THPT QG</title>
-  
-  <!-- Fonts & Tailwind CSS -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- KaTeX CSS & JS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-
-  <style>
-    :root {
-      --paper: #FAF9F5;
-      --ink: #14213D;
-      --ink-soft: #4B5675;
-      --line: #E4E1D8;
-      --accent: #FCA311;
-      --accent-hover: #E08E00;
-    }
-    body { background: var(--paper); font-family: 'Inter', sans-serif; color: var(--ink); }
-    .font-display { font-family: 'Sora', sans-serif; }
-    .font-mono-num { font-family: 'IBM Plex Mono', monospace; }
-    
-    .option-btn:hover { border-color: var(--accent); }
-    .option-btn.selected { background: #F1EEE5; border-color: var(--ink) !important; }
-    .option-btn.selected .bubble { background: var(--ink); color: #fff; border-color: var(--ink); }
-    
-    .bubble {
-      width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 600; font-size: 13px; color: var(--ink-soft); flex-shrink: 0;
-    }
-
-    .badge-dgnl { background-color: #1e3a8a; color: #ffffff; }
-    .badge-dgtd { background-color: #581c87; color: #ffffff; }
-    .badge-thpt { background-color: #065f46; color: #ffffff; }
-
-    .tag-easy { background-color: #dcfce7; color: #166534; }
-    .tag-medium { background-color: #e0f2fe; color: #075985; }
-    .tag-hard { background-color: #fef3c7; color: #92400e; }
-    .tag-vhard { background-color: #fee2e2; color: #991b1b; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Soạn & Luyện Thi AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
 </head>
-<body class="min-h-screen">
+<body class="bg-slate-50 font-sans min-h-screen p-4 md:p-8">
 
-  <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6"></div>
+    <div class="max-w-4xl mx-auto space-y-8">
+        
+        <!-- FORM SOẠN ĐỀ -->
+        <div id="setupSection" class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Soạn đề thi phân hóa bằng Gemini AI</h2>
+            <p class="text-slate-500 text-sm mb-6">Hệ thống sẽ tự động phân tích và tạo bộ câu hỏi có ma trận độ khó chuẩn cấu trúc kỳ thi.</p>
 
-  <script>
-    // --- 1. DỮ LIỆU ĐỀ THI MẪU ---
-    const defaultExams = [
-      {
-        id: "exam-dgnl-sample",
-        title: "Đề Thi Tư Duy Định Lượng & Logic Mẫu",
-        examType: "ĐGNL (ĐHQG)",
-        difficulty: "Hỗn hợp chuẩn đề thi thật",
-        duration: 50,
-        createdAt: "2026-08-26",
-        questions: [
-          {
-            id: "q1",
-            content: "Cho hàm số $y = -x^3 + 3x^2 + 2$. Số điểm cực trị của hàm số là:",
-            options: ["0", "1", "2", "3"],
-            correctIndex: 2,
-            difficulty: "Thông hiểu",
-            explanation: "Đạo hàm $y' = -3x^2 + 6x = 0$ có 2 nghiệm phân biệt $x=0, x=2$ nên hàm số có 2 điểm cực trị."
-          },
-          {
-            id: "q2",
-            content: "Cho tập hợp $A = \\{x \\in \\mathbb{R} \\mid x^2 - 4x + 3 = 0\\}$. Tổng các phần tử của $A$ bằng:",
-            options: ["3", "4", "1", "7"],
-            correctIndex: 1,
-            difficulty: "Nhận biết",
-            explanation: "Phương trình $x^2 - 4x + 3 = 0$ có 2 nghiệm $x_1 = 1, x_2 = 3$. Tổng $1 + 3 = 4$."
-          },
-          {
-            id: "q3",
-            content: "Giá trị lớn nhất của hàm số $y = -x^2 + 4x - 1$ trên $\\mathbb{R}$ là:",
-            options: ["3", "-3", "1", "5"],
-            correctIndex: 0,
-            difficulty: "Vận dụng",
-            explanation: "Tung độ đỉnh Parabol $y_{max} = 3$ tại $x = 2$."
-          }
-        ]
-      }
-    ];
+            <div id="errorAlert" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"></div>
 
-    // --- 2. TRẠNG THÁI ỨNG DỤNG ---
-    let state = {
-      screen: 'home', // 'home', 'generator', 'exam', 'result'
-      exams: loadSavedExams(),
-      apiKey: localStorage.getItem('user_gemini_key') || '',
-      currentExam: null,
-      userAnswers: {},
-      timeLeft: 0,
-      timerId: null,
-      loading: false,
-      errorMsg: '',
-      shuffledQuestions: []
-    };
-
-    function loadSavedExams() {
-      try {
-        const data = localStorage.getItem('saved_exams_v3');
-        if (!data) return defaultExams;
-        const parsed = JSON.parse(data);
-        return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultExams;
-      } catch (e) {
-        return defaultExams;
-      }
-    }
-
-    function saveExams(list) {
-      state.exams = list;
-      localStorage.setItem('saved_exams_v3', JSON.stringify(list));
-    }
-
-    function renderMath(text) {
-      if (!text) return '';
-      return text.replace(/\$([^$]+)\$/g, (match, math) => {
-        try {
-          return katex.renderToString(math, { throwOnError: false });
-        } catch (e) {
-          return math;
-        }
-      });
-    }
-
-    function shuffleArray(arr) {
-      const array = [...arr];
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    function getExamTypeClass(type) {
-      if (type.includes('ĐGNL')) return 'badge-dgnl';
-      if (type.includes('ĐGTD')) return 'badge-dgtd';
-      return 'badge-thpt';
-    }
-
-    function getDifficultyClass(diff) {
-      if (diff.includes('Nhận biết')) return 'tag-easy';
-      if (diff.includes('Thông hiểu')) return 'tag-medium';
-      if (diff.includes('Vận dụng cao')) return 'tag-vhard';
-      return 'tag-hard';
-    }
-
-    // --- 3. MÀN HÌNH CHÍNH (SẢNH THI) ---
-    function renderHome() {
-      const app = document.getElementById('app');
-      app.innerHTML = `
-        <div class="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">LuyệnThi.AI</h1>
-            <p class="text-sm text-gray-600 mt-1">Phòng thi thông minh phân hóa chuẩn ĐGNL, ĐGTD & THPT Quốc Gia</p>
-          </div>
-          <button onclick="goGenerator()" class="px-5 py-3 rounded-xl bg-[var(--accent)] text-[var(--ink)] font-bold text-sm shadow-sm hover:bg-[var(--accent-hover)] transition flex items-center gap-2">
-            ✨ Tạo đề thi chuẩn AI
-          </button>
-        </div>
-
-        <div class="bg-white rounded-2xl border border-[var(--line)] p-6 shadow-sm">
-          <div class="flex items-center justify-between mb-5">
-            <h2 class="font-display font-bold text-lg">Kho đề thi hiện có (${state.exams.length})</h2>
-            <button onclick="resetDefaultExams()" class="text-xs text-gray-400 hover:text-red-500 underline transition">
-              Khôi phục đề mẫu
-            </button>
-          </div>
-
-          <div class="space-y-3">
-            ${state.exams.map((exam, idx) => `
-              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[var(--line)] bg-[#FAF9F5] gap-3">
-                <div class="space-y-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-bold px-2 py-0.5 rounded ${getExamTypeClass(exam.examType || '')}">
-                      ${exam.examType || 'THPT QG'}
-                    </span>
-                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
-                      🎯 ${exam.difficulty || 'Phân hóa'}
-                    </span>
-                    <span class="text-xs text-gray-500">
-                      ⏱️ ${exam.duration || 45} phút • 📝 ${exam.questions ? exam.questions.length : 0} câu
-                    </span>
-                  </div>
-                  <h3 class="font-semibold text-base text-gray-900">${exam.title}</h3>
+            <form id="aiForm" class="space-y-4" onsubmit="return false;">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">1. Tên bài thi / Chủ đề</label>
+                    <input type="text" id="examTitle" value="Đề Luyện Thi AI — 2026" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                  <button onclick="startExam('${exam.id}')" class="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[var(--ink)] text-white font-semibold text-sm hover:opacity-90 transition">
-                    Vào thi →
-                  </button>
-                  <button onclick="deleteExam('${exam.id}')" class="px-3 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm transition">
-                    🗑️
-                  </button>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">2. Chọn kỳ thi định hướng</label>
+                        <select id="examType" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="Đánh giá Năng lực (ĐHQG)">ĐGNL — Đánh giá Năng lực (ĐHQG)</option>
+                            <option value="Đánh giá Tư duy (Bách Khoa)">ĐGTD — Đánh giá Tư duy (Bách Khoa)</option>
+                            <option value="THPT Quốc Gia">THPT Quốc Gia</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">3. Mức độ phân hóa câu hỏi</label>
+                        <select id="examLevel" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="Cơ bản (Nhận biết - Thông hiểu)">Cơ bản (Nhận biết - Thông hiểu)</option>
+                            <option value="Nâng cao (Vận dụng - Vận dụng cao)">Nâng cao (Vận dụng - Vận dụng cao)</option>
+                        </select>
+                    </div>
                 </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
 
-    // --- 4. MÀN HÌNH TẠO ĐỀ AI ---
-    function renderGenerator() {
-      const app = document.getElementById('app');
-      app.innerHTML = `
-        <button onclick="goHome()" class="text-sm text-gray-500 mb-4 inline-block hover:underline">← Quay lại Sảnh chính</button>
-        <div class="bg-white rounded-2xl border border-[var(--line)] p-6 space-y-5 shadow-sm max-w-2xl mx-auto">
-          <div>
-            <h2 class="font-display font-bold text-xl">Soạn đề thi phân hóa bằng Gemini AI</h2>
-            <p class="text-xs text-gray-500 mt-1">Hệ thống sẽ tự động phân tích và tạo bộ câu hỏi có ma trận độ khó chuẩn cấu trúc kỳ thi.</p>
-          </div>
-          
-          ${state.errorMsg ? `<div class="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">${state.errorMsg}</div>` : ''}
-
-          <div>
-            <label class="text-xs font-bold text-gray-600 uppercase block mb-1">1. Tên bài thi / Chủ đề</label>
-            <input id="examTitle" type="text" placeholder="Nhập tên bài thi..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none" value="Đề Luyện Thi AI — ${new Date().toLocaleDateString('vi-VN')}">
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">2. Chọn Kỳ thi định hướng</label>
-              <select id="examTypeSelect" class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none">
-                <option value="ĐGNL (ĐHQG)">ĐGNL — Đánh giá Năng lực (ĐHQG)</option>
-                <option value="ĐGTD (ĐH Bách Khoa)">ĐGTD — Đánh giá Tư duy (ĐH Bách Khoa)</option>
-                <option value="THPT Quốc Gia">THPT Quốc Gia (Bộ GD&ĐT)</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">3. Mức độ phân hóa câu hỏi</label>
-              <select id="difficultySelect" class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none">
-                <option value="Cơ bản (Nhận biết - Thông hiểu)">Cơ bản (Nhận biết - Thông hiểu)</option>
-                <option value="Phân hóa cao (Vận dụng & Vận dụng cao)">Phân hóa cao (Vận dụng & VD Cao)</option>
-                <option value="Hỗn hợp chuẩn đề thi thật">Hỗn hợp đầy đủ 4 mức độ</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">4. Thời gian làm bài (Phút)</label>
-              <input id="examDuration" type="number" value="50" min="5" max="180" class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none">
-            </div>
-            <div>
-              <label class="text-xs font-bold text-gray-600 uppercase block mb-1">5. Gemini API Key</label>
-              <input id="apiKeyInput" type="password" placeholder="Dán API Key từ Google AI Studio..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none" value="${state.apiKey}">
-            </div>
-          </div>
-
-          <div>
-            <label class="text-xs font-bold text-gray-600 uppercase block mb-1">6. Nội dung kiến thức / Tài liệu thô</label>
-            <textarea id="sourceContent" rows="5" placeholder="Dán văn bản, bài học hoặc ghi chú dạng bài vào đây để Gemini tự biên soạn..." class="w-full text-sm p-3 rounded-xl border border-[var(--line)] bg-[#FAF9F5] focus:bg-white focus:outline-none"></textarea>
-          </div>
-
-          <button onclick="generateExamWithAI()" ${state.loading ? 'disabled' : ''} class="w-full py-4 rounded-xl bg-[var(--accent)] font-bold text-base hover:bg-[var(--accent-hover)] transition shadow-sm">
-            ${state.loading ? '⏳ Gemini đang biên soạn đề thi...' : '✨ Tạo Đề Chuẩn Cấu Trúc Ngay'}
-          </button>
-        </div>
-      `;
-    }
-
-    // --- 5. MÀN HÌNH LÀM BÀI THI ---
-    function renderExam() {
-      const app = document.getElementById('app');
-      const exam = state.currentExam;
-      const minutes = Math.floor(state.timeLeft / 60);
-      const seconds = state.timeLeft % 60;
-      const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-      app.innerHTML = `
-        <div class="sticky top-0 bg-[#FAF9F5] py-4 border-b border-[var(--line)] flex items-center justify-between mb-6 z-10">
-          <div>
-            <button onclick="goHome()" class="text-xs text-gray-500 hover:underline">← Thoát bài thi</button>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[11px] font-bold px-2 py-0.5 rounded ${getExamTypeClass(exam.examType)}">${exam.examType}</span>
-              <h2 class="font-display font-bold text-base text-gray-900">${exam.title}</h2>
-            </div>
-          </div>
-          <div class="font-mono-num text-2xl font-bold bg-white px-4 py-1.5 rounded-xl border border-[var(--line)] shadow-sm">
-            ⏳ ${timeStr}
-          </div>
-        </div>
-
-        <div class="space-y-6">
-          ${state.shuffledQuestions.map((q, idx) => `
-            <div class="bg-white rounded-2xl border border-[var(--line)] p-5 shadow-sm">
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold text-gray-400">CÂU ${idx + 1}</span>
-                <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded ${getDifficultyClass(q.difficulty || '')}">
-                  ${q.difficulty || 'Mức độ Phân hóa'}
-                </span>
-              </div>
-              <div class="text-base font-medium mb-4 text-gray-900">${renderMath(q.content)}</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                ${q.options.map((opt, optIdx) => {
-                  const letter = ['A', 'B', 'C', 'D'][optIdx];
-                  const isSelected = state.userAnswers[q.id] === optIdx;
-                  return `
-                    <button onclick="selectAnswer('${q.id}', ${optIdx})" 
-                      class="option-btn flex items-center gap-3 text-left p-3 rounded-xl border border-[var(--line)] transition ${isSelected ? 'selected' : 'bg-white'}">
-                      <span class="bubble">${letter}</span>
-                      <span class="text-sm">${renderMath(opt)}</span>
-                    </button>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="mt-8 mb-12">
-          <button onclick="submitExam()" class="w-full py-4 rounded-xl bg-[var(--ink)] text-white font-bold text-lg shadow-md hover:opacity-95 transition">
-            Nộp Bài Thi
-          </button>
-        </div>
-      `;
-    }
-
-    // --- 6. MÀN HÌNH KẾT QUẢ & LỜI GIẢI ---
-    function renderResult() {
-      const app = document.getElementById('app');
-      const exam = state.currentExam;
-      let correct = 0;
-      
-      state.shuffledQuestions.forEach(q => {
-        if (state.userAnswers[q.id] === q.correctIndex) correct++;
-      });
-      
-      const total = state.shuffledQuestions.length;
-      const score = total > 0 ? ((correct / total) * 10).toFixed(1) : "0.0";
-
-      app.innerHTML = `
-        <div class="bg-white rounded-2xl border border-[var(--line)] p-6 sm:p-8 text-center max-w-xl mx-auto mt-6 shadow-sm">
-          <span class="text-xs font-bold px-2.5 py-1 rounded ${getExamTypeClass(exam.examType)}">${exam.examType}</span>
-          <h1 class="font-display font-bold text-xl mt-2 mb-1">${exam.title}</h1>
-          <p class="text-xs text-gray-500 mb-6">Kết quả đánh giá năng lực cá nhân</p>
-          
-          <div class="text-6xl font-extrabold text-[var(--ink)] mb-2 font-display">${score}</div>
-          <p class="text-sm text-gray-600 mb-6">Đúng ${correct} / ${total} câu</p>
-
-          <div class="text-left space-y-4 mb-8">
-            <h3 class="font-bold text-sm text-gray-700 uppercase border-b pb-2">Chi tiết đáp án & Phân tích lời giải:</h3>
-            ${state.shuffledQuestions.map((q, idx) => {
-              const userAns = state.userAnswers[q.id];
-              const isCorrect = userAns === q.correctIndex;
-              return `
-                <div class="p-4 rounded-xl border ${isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'} text-xs space-y-1">
-                  <div class="flex justify-between font-semibold text-gray-800">
-                    <span>Câu ${idx + 1}: ${isCorrect ? '✅ Đúng' : '❌ Sai'}</span>
-                    <span class="px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-700">${q.difficulty}</span>
-                  </div>
-                  <p class="text-gray-700">Đáp án chọn: <b>${userAns !== undefined ? ['A','B','C','D'][userAns] : 'Chưa chọn'}</b> | Đáp án đúng: <b>${['A','B','C','D'][q.correctIndex]}</b></p>
-                  <p class="text-gray-600 mt-2"><i>💡 Lời giải chi tiết:</i> ${renderMath(q.explanation)}</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">4. Thời gian làm bài (Phút)</label>
+                        <input type="number" id="examDuration" value="15" min="1" max="180" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">5. Gemini API Key</label>
+                        <input type="password" id="apiKey" placeholder="Dán API Key tại đây..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
                 </div>
-              `;
-            }).join('')}
-          </div>
 
-          <button onclick="goHome()" class="w-full py-3.5 rounded-xl bg-[var(--ink)] text-white font-bold transition hover:opacity-90">
-            🏠 Quay lại Sảnh chính
-          </button>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">6. Nội dung kiến thức / Tài liệu thô</label>
+                    <textarea id="examContent" rows="3" placeholder="Dán văn bản, bài học hoặc ghi chú dạng bài vào đây..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                </div>
+
+                <button type="button" onclick="generateExam()" id="btnSubmit" class="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-all">
+                    ✨ Tạo Đề Chuẩn Cấu Trúc Ngay
+                </button>
+            </form>
         </div>
-      `;
-    }
 
-    // --- 7. TẠO ĐỀ VỚI GEMINI AI ---
-    async function generateExamWithAI() {
-      const key = document.getElementById('apiKeyInput').value.trim();
-      const content = document.getElementById('sourceContent').value.trim();
-      const examType = document.getElementById('examTypeSelect').value;
-      const difficulty = document.getElementById('difficultySelect').value;
-      const duration = parseInt(document.getElementById('examDuration').value) || 50;
-      const title = document.getElementById('examTitle').value.trim() || `Đề ${examType}`;
+        <!-- SẢNH THI -->
+        <div id="lobbySection" class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+            <h1 class="text-2xl font-bold text-slate-800 text-center">Sảnh Thi Trực Tuyến</h1>
+            <p class="text-slate-500 text-sm text-center mb-6">Chọn bộ đề để bắt đầu luyện tập</p>
+            <div id="examList" class="space-y-4"></div>
+        </div>
 
-      if (!key) { state.errorMsg = 'Vui lòng nhập Gemini API Key!'; renderGenerator(); return; }
-      if (!content) { state.errorMsg = 'Vui lòng nhập nội dung tài liệu!'; renderGenerator(); return; }
+        <!-- MAN HINH LAM BAI THI -->
+        <div id="quizSection" class="hidden bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+            <div class="flex justify-between items-center border-b pb-4">
+                <div>
+                    <h2 id="quizTitle" class="text-xl font-bold text-slate-800"></h2>
+                    <p id="quizMeta" class="text-xs text-slate-500"></p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-slate-400 block">Thời gian còn lại</span>
+                    <span id="timer" class="text-xl font-mono font-bold text-amber-600">00:00</span>
+                </div>
+            </div>
 
-      state.loading = true;
-      state.errorMsg = '';
-      localStorage.setItem('user_gemini_key', key);
-      state.apiKey = key;
-      renderGenerator();
+            <div id="quizQuestions" class="space-y-6"></div>
 
-      const prompt = `Bạn là chuyên gia khảo thí ra đề thi. Hãy biên soạn 5 câu hỏi trắc nghiệm chuẩn cấu trúc kỳ thi "${examType}" với mức độ phân hóa "${difficulty}" dựa trên nội dung sau: "${content}".
-      
-      YÊU CẦU TRẢ VỀ:
-      Chỉ trả về duy nhất 1 mảng JSON thuần túy theo mẫu:
-      [
-        {
-          "content": "Nội dung câu hỏi (sử dụng $công_thức_toán$ nếu có)",
-          "options": ["Lựa chọn A", "Lựa chọn B", "Lựa chọn C", "Lựa chọn D"],
-          "correctIndex": 0,
-          "difficulty": "Nhận biết / Thông hiểu / Vận dụng / Vận dụng cao",
-          "explanation": "Lời giải chi tiết câu hỏi..."
+            <div class="flex justify-between items-center pt-4 border-t">
+                <button onclick="exitQuiz()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-sm">
+                    ← Thoát
+                </button>
+                <button id="btnSubmitQuiz" onclick="submitQuiz()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">
+                    Nộp Bài Thi
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentTimer = null;
+        let activeExam = null;
+
+        // Render danh sách đề thi từ LocalStorage
+        function renderExams() {
+            const listContainer = document.getElementById('examList');
+            let storedExams = [];
+            
+            try {
+                storedExams = JSON.parse(localStorage.getItem('exams')) || [];
+            } catch(e) {
+                storedExams = [];
+            }
+            
+            if (storedExams.length === 0) {
+                listContainer.innerHTML = `<p class="text-center text-slate-400 py-4 text-sm">Chưa có đề thi nào. Hãy dùng bảng bên trên để tạo đề bằng AI!</p>`;
+                return;
+            }
+
+            listContainer.innerHTML = storedExams.map((exam, index) => `
+                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all">
+                    <div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                            <span class="px-2 py-0.5 bg-slate-200 rounded text-slate-700 font-bold">Đề #${index + 1}</span>
+                            <span>⏱ ${exam.duration || 15} phút</span>
+                            <span>• ${exam.type || 'Tổng hợp'}</span>
+                        </div>
+                        <h3 class="font-bold text-slate-800">${exam.title} (${exam.questions ? exam.questions.length : 0} câu)</h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="startQuiz(${exam.id})" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-all">
+                            Vào thi →
+                        </button>
+                        <button onclick="deleteExam(${exam.id})" class="p-2 text-red-500 hover:bg-red-50 rounded-lg text-xs">
+                            Xóa
+                        </button>
+                    </div>
+                </div>
+            `).join('');
         }
-      ]`;
 
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
-        });
+        // Tạo đề bằng Gemini API
+        async function generateExam() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const title = document.getElementById('examTitle').value.trim();
+            const type = document.getElementById('examType').value;
+            const level = document.getElementById('examLevel').value;
+            const duration = parseInt(document.getElementById('examDuration').value) || 15;
+            const rawContent = document.getElementById('examContent').value.trim();
+            
+            const errorAlert = document.getElementById('errorAlert');
+            const btnSubmit = document.getElementById('btnSubmit');
 
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message || 'Lỗi từ API Gemini');
+            errorAlert.classList.add('hidden');
 
-        const rawJson = data.candidates[0].content.parts[0].text;
-        const questions = JSON.parse(rawJson).map((q, i) => ({ ...q, id: 'ai-q-' + Date.now() + '-' + i }));
+            if (!apiKey) {
+                errorAlert.innerText = "Vui lòng nhập Gemini API Key!";
+                errorAlert.classList.remove('hidden');
+                return;
+            }
 
-        const newExam = {
-          id: 'exam-' + Date.now(),
-          title,
-          examType,
-          difficulty,
-          duration,
-          createdAt: new Date().toISOString().split('T')[0],
-          questions
-        };
+            btnSubmit.disabled = true;
+            btnSubmit.innerText = "⏳ AI đang biên soạn đề thi...";
 
-        saveExams([newExam, ...state.exams]);
-        state.loading = false;
-        goHome();
-      } catch (e) {
-        state.loading = false;
-        state.errorMsg = 'Lỗi tạo đề: ' + e.message;
-        renderGenerator();
-      }
+            const prompt = `Bạn là chuyên gia ra đề thi. Hãy biên soạn một bộ đề thi dạng JSON hoàn chỉnh dựa trên cấu hình:
+- Tên đề: ${title}
+- Kỳ thi: ${type}
+- Độ khó: ${level}
+- Tài liệu bổ trợ: ${rawContent || "Kiến thức tổng hợp"}
+
+Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (không kèm markdown, không giải thích) có cấu trúc chính xác như sau:
+{
+  "questions": [
+    {
+      "id": 1,
+      "question": "Nội dung câu hỏi?",
+      "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+      "answer": 0,
+      "explanation": "Giải thích chi tiết..."
     }
+  ]
+}`;
 
-    // --- 8. HÀM ĐIỀU HƯỚNG & XỬ LÝ ---
-    function goHome() {
-      if (state.timerId) clearInterval(state.timerId);
-      state.screen = 'home';
-      renderHome();
-    }
+            try {
+                // Gọi API với model gemini-1.5-flash
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            response_mime_type: "application/json"
+                        }
+                    })
+                });
 
-    function goGenerator() {
-      state.screen = 'generator';
-      state.errorMsg = '';
-      renderGenerator();
-    }
+                const data = await response.json();
 
-    function startExam(examId) {
-      state.currentExam = state.exams.find(e => e.id === examId);
-      if (!state.currentExam) return;
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Lỗi khi gọi API Gemini.");
+                }
 
-      // Xáo trộn thứ tự câu hỏi khi bấm vào thi
-      state.shuffledQuestions = shuffleArray(state.currentExam.questions);
-      state.userAnswers = {};
-      state.timeLeft = (state.currentExam.duration || 50) * 60;
-      state.screen = 'exam';
-      
-      if (state.timerId) clearInterval(state.timerId);
-      state.timerId = setInterval(() => {
-        state.timeLeft--;
-        if (state.timeLeft <= 0) {
-          clearInterval(state.timerId);
-          submitExam();
-        } else {
-          renderExam();
+                let responseText = data.candidates[0].content.parts[0].text;
+                
+                // Làm sạch chuỗi JSON phòng trường hợp AI vẫn bọc trong ```json
+                responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const examParsed = JSON.parse(responseText);
+
+                if (!examParsed.questions || !Array.isArray(examParsed.questions)) {
+                    throw new Error("Cấu trúc dữ liệu AI trả về không đúng mẫu câu hỏi.");
+                }
+
+                // Lưu vào LocalStorage
+                const storedExams = JSON.parse(localStorage.getItem('exams')) || [];
+                const newExam = {
+                    id: Date.now(),
+                    title: title,
+                    type: type,
+                    duration: duration,
+                    questions: examParsed.questions
+                };
+
+                storedExams.unshift(newExam);
+                localStorage.setItem('exams', JSON.stringify(storedExams));
+
+                renderExams();
+                alert(`Đã tạo thành công bộ đề với ${newExam.questions.length} câu hỏi!`);
+
+            } catch (err) {
+                errorAlert.innerText = `Không thể tạo đề: ${err.message}`;
+                errorAlert.classList.remove('hidden');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = "✨ Tạo Đề Chuẩn Cấu Trúc Ngay";
+            }
         }
-      }, 1000);
 
-      renderExam();
-    }
+        // Vào làm bài thi
+        function startQuiz(examId) {
+            const storedExams = JSON.parse(localStorage.getItem('exams')) || [];
+            activeExam = storedExams.find(e => e.id === examId);
 
-    function selectAnswer(questionId, optionIndex) {
-      state.userAnswers[questionId] = optionIndex;
-      renderExam();
-    }
+            if (!activeExam || !activeExam.questions) {
+                return alert("Bộ đề không hợp lệ hoặc đã bị xóa!");
+            }
 
-    function submitExam() {
-      if (state.timerId) clearInterval(state.timerId);
-      state.screen = 'result';
-      renderResult();
-    }
+            document.getElementById('setupSection').classList.add('hidden');
+            document.getElementById('lobbySection').classList.add('hidden');
+            document.getElementById('quizSection').classList.remove('hidden');
 
-    function deleteExam(examId) {
-      if (confirm('Bạn có chắc muốn xóa bài thi này khỏi kho?')) {
-        const list = state.exams.filter(e => e.id !== examId);
-        saveExams(list);
-        renderHome();
-      }
-    }
+            document.getElementById('quizTitle').innerText = activeExam.title;
+            document.getElementById('quizMeta').innerText = `${activeExam.type} • ${activeExam.questions.length} câu`;
 
-    function resetDefaultExams() {
-      saveExams(defaultExams);
-      renderHome();
-    }
+            // Render câu hỏi
+            const questionsContainer = document.getElementById('quizQuestions');
+            questionsContainer.innerHTML = activeExam.questions.map((q, idx) => `
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <p class="font-bold text-slate-800 text-sm">Câu ${idx + 1}: ${q.question}</p>
+                    <div class="space-y-2">
+                        ${q.options.map((opt, oIdx) => `
+                            <label class="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-amber-50">
+                                <input type="radio" name="q_${q.id}" value="${oIdx}" class="w-4 h-4 text-amber-600">
+                                <span class="text-sm text-slate-700">${opt}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div id="explain_${q.id}" class="hidden p-3 bg-blue-50 text-blue-800 text-xs rounded-lg mt-2">
+                        <strong>Giải thích:</strong> ${q.explanation || 'Không có giải thích.'}
+                    </div>
+                </div>
+            `).join('');
 
-    // Khởi chạy ứng dụng
-    renderHome();
-  </script>
+            // Chạy đồng hồ
+            startTimer(activeExam.duration * 60);
+        }
+
+        // Đồng hồ đếm ngược
+        function startTimer(seconds) {
+            clearInterval(currentTimer);
+            let timeLeft = seconds;
+
+            const timerDisplay = document.getElementById('timer');
+            
+            currentTimer = setInterval(() => {
+                const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const s = (timeLeft % 60).toString().padStart(2, '0');
+                timerDisplay.innerText = `${m}:${s}`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(currentTimer);
+                    alert("Đã hết thời gian làm bài!");
+                    submitQuiz();
+                }
+                timeLeft--;
+            }, 1000);
+        }
+
+        // Nộp bài thi & Chấm điểm
+        function submitQuiz() {
+            clearInterval(currentTimer);
+            let score = 0;
+            const total = activeExam.questions.length;
+
+            activeExam.questions.forEach(q => {
+                const selected = document.querySelector(`input[name="q_${q.id}"]:checked`);
+                const explainBox = document.getElementById(`explain_${q.id}`);
+                
+                if (explainBox) explainBox.classList.remove('hidden');
+
+                if (selected && parseInt(selected.value) === q.answer) {
+                    score++;
+                }
+            });
+
+            alert(`Bạn đã hoàn thành bài thi!\nKết quả: ${score}/${total} câu đúng.`);
+            document.getElementById('btnSubmitQuiz').disabled = true;
+            document.getElementById('btnSubmitQuiz').innerText = "Đã Nộp Bài";
+        }
+
+        // Thoát giao diện làm bài
+        function exitQuiz() {
+            clearInterval(currentTimer);
+            document.getElementById('quizSection').classList.add('hidden');
+            document.getElementById('setupSection').classList.remove('hidden');
+            document.getElementById('lobbySection').classList.remove('hidden');
+            document.getElementById('btnSubmitQuiz').disabled = false;
+            document.getElementById('btnSubmitQuiz').innerText = "Nộp Bài Thi";
+        }
+
+        // Xóa đề thi
+        function deleteExam(examId) {
+            if (!confirm("Bạn có chắc muốn xóa đề thi này?")) return;
+            let storedExams = JSON.parse(localStorage.getItem('exams')) || [];
+            storedExams = storedExams.filter(e => e.id !== examId);
+            localStorage.setItem('exams', JSON.stringify(storedExams));
+            renderExams();
+        }
+
+        // Tải danh sách lần đầu
+        document.addEventListener('DOMContentLoaded', renderExams);
+    </script>
 </body>
 </html>
