@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ Thống Soạn & Luyện Thi AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- KaTeX CSS & JS hỗ trợ hiển thị công thức Toán chuẩn -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
 </head>
 <body class="bg-slate-50 font-sans min-h-screen p-4 md:p-8">
 
@@ -25,37 +27,43 @@
                     <input type="text" id="examTitle" value="Đề Luyện Thi AI — 2026" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-bold uppercase text-slate-600 mb-1">2. Chọn kỳ thi định hướng</label>
                         <select id="examType" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
-                            <option value="Đánh giá Năng lực (ĐHQG)">ĐGNL — Đánh giá Năng lực (ĐHQG)</option>
-                            <option value="Đánh giá Tư duy (Bách Khoa)">ĐGTD — Đánh giá Tư duy (Bách Khoa)</option>
                             <option value="THPT Quốc Gia">THPT Quốc Gia</option>
+                            <option value="ĐGTD — Bách Khoa Hà Nội">ĐGTD — Bách Khoa Hà Nội</option>
+                            <option value="ĐGNL — ĐHQG Hà Nội">ĐGNL — ĐHQG Hà Nội</option>
+                            <option value="ĐGNL — ĐHQG TP.HCM">ĐGNL — ĐHQG TP.HCM</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">3. Mức độ phân hóa câu hỏi</label>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">3. Mức độ phân hóa</label>
                         <select id="examLevel" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="Phân hóa chuẩn (Tăng dần từ Dễ đến Khó)">Chuẩn (Dễ → Khó)</option>
                             <option value="Cơ bản (Nhận biết - Thông hiểu)">Cơ bản (Nhận biết - Thông hiểu)</option>
-                            <option value="Nâng cao (Vận dụng - Vận dụng cao)">Nâng cao (Vận dụng - Vận dụng cao)</option>
+                            <option value="Nâng cao (Vận dụng - Vận dụng cao)">Nâng cao (Vận dụng cao)</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">4. Số lượng câu hỏi</label>
+                        <input type="number" id="questionCount" value="10" min="1" max="50" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">4. Thời gian làm bài (Phút)</label>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">5. Thời gian làm bài (Phút)</label>
                         <input type="number" id="examDuration" value="15" min="1" max="180" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">5. Gemini API Key</label>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">6. Gemini API Key</label>
                         <input type="password" id="apiKey" placeholder="Dán API Key tại đây..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">6. Nội dung kiến thức / Tài liệu thô</label>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">7. Nội dung kiến thức / Tài liệu thô</label>
                     <textarea id="examContent" rows="3" placeholder="Dán văn bản, bài học hoặc ghi chú dạng bài vào đây..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
                 </div>
 
@@ -85,14 +93,28 @@
                 </div>
             </div>
 
+            <!-- BẢNG KẾT QUẢ HIỂN THỊ SAU KHINỘP BÀI -->
+            <div id="resultSummary" class="hidden p-5 bg-slate-100 rounded-2xl border border-slate-200 text-center space-y-3">
+                <h3 class="text-lg font-bold text-slate-800">🎉 Kết Quả Bài Thi</h3>
+                <p id="scoreText" class="text-2xl font-extrabold text-emerald-600"></p>
+                <div class="flex justify-center gap-3 pt-2">
+                    <button id="btnRetryWrong" onclick="retryWrongQuestions()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm">
+                        🔄 Luyện lại câu sai
+                    </button>
+                    <button onclick="exitQuiz()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl transition-all shadow-sm">
+                        ➡️ Làm bài thi tiếp theo
+                    </button>
+                </div>
+            </div>
+
             <div id="quizQuestions" class="space-y-6"></div>
 
             <div class="flex justify-between items-center pt-4 border-t">
                 <button onclick="exitQuiz()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-sm">
                     ← Thoát
                 </button>
-                <button id="btnSubmitQuiz" onclick="submitQuiz()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">
-                    Nộp Bài Thi
+                <button id="btnSubmitQuiz" onclick="submitQuiz()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all">
+                    Đã Nộp Bài
                 </button>
             </div>
         </div>
@@ -102,6 +124,24 @@
     <script>
         let currentTimer = null;
         let activeExam = null;
+        let wrongQuestions = [];
+
+        // Trợ giúp Render Toán Học với KaTeX
+        function renderMath() {
+            setTimeout(() => {
+                if (window.renderMathInElement) {
+                    renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: "$$", right: "$$", display: true},
+                            {left: "\\(", right: "\\)", display: false},
+                            {left: "\\[", right: "\\]", display: true},
+                            {left: "$", right: "$", display: false}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            }, 50);
+        }
 
         // Render danh sách đề thi từ LocalStorage
         function renderExams() {
@@ -139,6 +179,8 @@
                     </div>
                 </div>
             `).join('');
+            
+            renderMath();
         }
 
         // Tạo đề bằng Gemini API
@@ -147,6 +189,7 @@
             const title = document.getElementById('examTitle').value.trim();
             const type = document.getElementById('examType').value;
             const level = document.getElementById('examLevel').value;
+            const qCount = parseInt(document.getElementById('questionCount').value) || 10;
             const duration = parseInt(document.getElementById('examDuration').value) || 15;
             const rawContent = document.getElementById('examContent').value.trim();
             
@@ -164,27 +207,30 @@
             btnSubmit.disabled = true;
             btnSubmit.innerText = "⏳ AI đang biên soạn đề thi...";
 
-            const prompt = `Bạn là chuyên gia ra đề thi. Hãy biên soạn một bộ đề thi dạng JSON hoàn chỉnh dựa trên cấu hình:
+            const prompt = `Bạn là chuyên gia ra đề thi cấp quốc gia. Hãy biên soạn một bộ đề thi trắc nghiệm gồm ${qCount} câu hỏi chuẩn hóa:
 - Tên đề: ${title}
-- Kỳ thi: ${type}
-- Độ khó: ${level}
-- Tài liệu bổ trợ: ${rawContent || "Kiến thức tổng hợp"}
+- Định hướng kỳ thi: ${type}
+- Tiêu chuẩn phân hóa: Sắp xếp danh sách câu hỏi theo thứ tự ĐỘ KHÓ TĂNG DẦN (từ Nhận biết -> Thông hiểu -> Vận dụng -> Vận dụng cao).
+- Tài liệu / Phạm vi kiến thức: ${rawContent || "Kiến thức toán học và tư duy tổng hợp"}
 
-Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (không kèm markdown, không giải thích) có cấu trúc chính xác như sau:
+LƯU Ý QUAN TRỌNG VỀ TOÁN HỌC:
+Tất cả các công thức, biến số, biểu thức toán học trong câu hỏi, đáp án và giải thích BẮT BUỘC phải bọc trong ký hiệu LaTeX chuẩn dạng \\( ... \\) cho inline hoặc $$ ... $$ cho display. 
+Ví dụ: \\(f(x) = x^3 - 3x + 1\\), \\(m = 3\\).
+
+Yêu cầu xuất dữ liệu: Trả về DUY NHẤT 1 chuỗi JSON hợp lệ (không kèm markdown, không thêm bất kỳ văn bản giải thích nào) theo cấu trúc:
 {
   "questions": [
     {
       "id": 1,
-      "question": "Nội dung câu hỏi?",
+      "question": "Nội dung câu hỏi chứa LaTeX...",
       "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
       "answer": 0,
-      "explanation": "Giải thích chi tiết..."
+      "explanation": "Lời giải chi tiết chứa LaTeX..."
     }
   ]
 }`;
 
             try {
-                // Gọi API với model gemini-3.6-flash
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -203,16 +249,13 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
                 }
 
                 let responseText = data.candidates[0].content.parts[0].text;
-                
-                // Làm sạch chuỗi JSON phòng trường hợp AI vẫn bọc trong ```json
                 responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
                 const examParsed = JSON.parse(responseText);
 
                 if (!examParsed.questions || !Array.isArray(examParsed.questions)) {
-                    throw new Error("Cấu trúc dữ liệu AI trả về không đúng mẫu câu hỏi.");
+                    throw new Error("Cấu trúc dữ liệu AI trả về không hợp lệ.");
                 }
 
-                // Lưu vào LocalStorage
                 const storedExams = JSON.parse(localStorage.getItem('exams')) || [];
                 const newExam = {
                     id: Date.now(),
@@ -237,14 +280,23 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
             }
         }
 
-        // Vào làm bài thi
-        function startQuiz(examId) {
-            const storedExams = JSON.parse(localStorage.getItem('exams')) || [];
-            activeExam = storedExams.find(e => e.id === examId);
-
-            if (!activeExam || !activeExam.questions) {
-                return alert("Bộ đề không hợp lệ hoặc đã bị xóa!");
+        // Bắt đầu làm bài thi
+        function startQuiz(examIdOrObject) {
+            if (typeof examIdOrObject === 'object') {
+                activeExam = examIdOrObject;
+            } else {
+                const storedExams = JSON.parse(localStorage.getItem('exams')) || [];
+                activeExam = storedExams.find(e => e.id === examIdOrObject);
             }
+
+            if (!activeExam || !activeExam.questions || activeExam.questions.length === 0) {
+                return alert("Bộ đề không hợp lệ hoặc không có câu hỏi!");
+            }
+
+            // Reset giao diện
+            document.getElementById('resultSummary').classList.add('hidden');
+            document.getElementById('btnSubmitQuiz').disabled = false;
+            document.getElementById('btnSubmitQuiz').classList.remove('hidden');
 
             document.getElementById('setupSection').classList.add('hidden');
             document.getElementById('lobbySection').classList.add('hidden');
@@ -256,23 +308,23 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
             // Render câu hỏi
             const questionsContainer = document.getElementById('quizQuestions');
             questionsContainer.innerHTML = activeExam.questions.map((q, idx) => `
-                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                    <p class="font-bold text-slate-800 text-sm">Câu ${idx + 1}: ${q.question}</p>
+                <div class="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-3" id="q_box_${q.id}">
+                    <p class="font-bold text-slate-800 text-base">Câu ${idx + 1}: ${q.question}</p>
                     <div class="space-y-2">
                         ${q.options.map((opt, oIdx) => `
-                            <label class="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-amber-50">
-                                <input type="radio" name="q_${q.id}" value="${oIdx}" class="w-4 h-4 text-amber-600">
+                            <label class="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-amber-50 transition-all">
+                                <input type="radio" name="q_${q.id}" value="${oIdx}" class="w-4 h-4 text-amber-600 focus:ring-amber-500">
                                 <span class="text-sm text-slate-700">${opt}</span>
                             </label>
                         `).join('')}
                     </div>
-                    <div id="explain_${q.id}" class="hidden p-3 bg-blue-50 text-blue-800 text-xs rounded-lg mt-2">
-                        <strong>Giải thích:</strong> ${q.explanation || 'Không có giải thích.'}
+                    <div id="explain_${q.id}" class="hidden p-4 bg-blue-50 border border-blue-200 text-blue-900 text-xs md:text-sm rounded-xl mt-3 leading-relaxed">
+                        <strong>Lời giải chi tiết:</strong> ${q.explanation || 'Không có hướng dẫn giải.'}
                     </div>
                 </div>
             `).join('');
 
-            // Chạy đồng hồ
+            renderMath();
             startTimer(activeExam.duration * 60);
         }
 
@@ -280,7 +332,6 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
         function startTimer(seconds) {
             clearInterval(currentTimer);
             let timeLeft = seconds;
-
             const timerDisplay = document.getElementById('timer');
             
             currentTimer = setInterval(() => {
@@ -302,6 +353,7 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
             clearInterval(currentTimer);
             let score = 0;
             const total = activeExam.questions.length;
+            wrongQuestions = [];
 
             activeExam.questions.forEach(q => {
                 const selected = document.querySelector(`input[name="q_${q.id}"]:checked`);
@@ -311,12 +363,42 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
 
                 if (selected && parseInt(selected.value) === q.answer) {
                     score++;
+                } else {
+                    wrongQuestions.push(q);
                 }
             });
 
-            alert(`Bạn đã hoàn thành bài thi!\nKết quả: ${score}/${total} câu đúng.`);
-            document.getElementById('btnSubmitQuiz').disabled = true;
-            document.getElementById('btnSubmitQuiz').innerText = "Đã Nộp Bài";
+            // Hiển thị bảng tổng kết kết quả
+            const scoreText = document.getElementById('scoreText');
+            scoreText.innerText = `Đúng ${score} / ${total} câu (${Math.round((score/total)*100)}%)`;
+            
+            const btnRetry = document.getElementById('btnRetryWrong');
+            if (wrongQuestions.length === 0) {
+                btnRetry.classList.add('hidden');
+            } else {
+                btnRetry.classList.remove('hidden');
+            }
+
+            document.getElementById('resultSummary').classList.remove('hidden');
+            document.getElementById('btnSubmitQuiz').classList.add('hidden');
+            
+            renderMath();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Tạo bài thi luyện lại các câu sai
+        function retryWrongQuestions() {
+            if (wrongQuestions.length === 0) return;
+            
+            const wrongExam = {
+                id: Date.now(),
+                title: `[Luyện lại câu sai] ${activeExam.title}`,
+                type: activeExam.type,
+                duration: Math.max(5, Math.ceil(wrongQuestions.length * 1.5)),
+                questions: wrongQuestions
+            };
+
+            startQuiz(wrongExam);
         }
 
         // Thoát giao diện làm bài
@@ -325,8 +407,7 @@ Yêu cầu xuất dữ liệu: Trả về duy nhất 1 chuỗi JSON hợp lệ (
             document.getElementById('quizSection').classList.add('hidden');
             document.getElementById('setupSection').classList.remove('hidden');
             document.getElementById('lobbySection').classList.remove('hidden');
-            document.getElementById('btnSubmitQuiz').disabled = false;
-            document.getElementById('btnSubmitQuiz').innerText = "Nộp Bài Thi";
+            renderExams();
         }
 
         // Xóa đề thi
